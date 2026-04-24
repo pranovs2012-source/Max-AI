@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>MAX AI</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: #121212;
+      color: #bbdefb;  /* blue-ish text */
+      font-family: 'Segoe UI', sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header {
+      padding: 15px 20px;
+      text-align: center;
+      border-bottom: 1px solid #333;
+      position: relative;
+      background-color: #1e1e1e;
+    }
+
+    .logo {
+      color: #e53935;  /* red */
+      font-size: 42px;       /* much bigger */
+      font-weight: 900;      /* very bold */
+      font-style: italic;
+      margin: 0;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: #90caf9;
+    }
+
+    .credits {
+      font-size: 12px;
+      color: #78909c;
+      margin-top: 5px;
+    }
+
+    #logoutBtn {
+      position: absolute;
+      top: 16px;
+      right: 20px;
+      background: #e53935;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .chat-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      max-width: 900px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 10px;
+    }
+
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+      background-color: #1e1e1e;
+      border-radius: 10px;
+      margin-bottom: 10px;
+    }
+
+    .message {
+      margin-bottom: 12px;
+      display: flex;
+    }
+
+    .message.ai {
+      justify-content: flex-start;
+    }
+
+    .message.user {
+      justify-content: flex-end;
+    }
+
+    .message-content-wrapper {
+      max-width: 85%;
+      padding: 10px 14px;
+    }
+
+    .message.ai .message-content-wrapper {
+      background: #ffffff;
+      color: #212121;
+      border-radius: 12px 12px 12px 0;
+    }
+
+    .message.user .message-content-wrapper {
+      background: #29b6f6;
+      color: #ffffff;
+      border-radius: 12px 12px 0 12px;
+    }
+
+    .code-block {
+      background: #0d1117;
+      border: 1px solid #21262d;
+      border-radius: 6px;
+      padding: 10px 12px;
+      margin: 8px 0;
+      font-family: 'Courier New', monospace;
+      position: relative;
+    }
+
+    .code-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+      font-size: 12px;
+      color: #adbac7;
+    }
+
+    .code-header span.language {
+      font-weight: 500;
+    }
+
+    .code-header .copy-btn {
+      background: #0066cc;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 10px;
+      cursor: pointer;
+      transition: 0.15s background;
+    }
+
+    .code-header .copy-btn:hover {
+      background: #29b6f6;
+    }
+
+    .code-content {
+      margin: 0;
+      white-space: pre-wrap;
+      font-size: 13px;
+      color: #e6e6e6;
+    }
+
+    .image-link {
+      color: #bbdefb;
+      text-decoration: underline;
+      display: inline-block;
+      margin: 5px 0;
+    }
+
+    .input-area {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      background: #1e1e1e;
+      border-radius: 10px;
+      border: 1px solid #333;
+    }
+
+    #messageInput {
+      flex: 1;
+      resize: none;
+      padding: 10px 12px;
+      background: #2b2b2b;
+      color: #d1d5da;
+      border: 1px solid #3a3a3a;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+      max-height: 120px;
+    }
+
+    #sendBtn,
+    #micBtn {
+      flex: 0 0 auto;
+      width: 46px;
+      height: 46px;
+      border: none;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      cursor: pointer;
+    }
+
+    #sendBtn {
+      background: #29b6f6;
+      color: #ffffff;
+    }
+
+    #micBtn {
+      background: #29b6f6;
+      color: #ffffff;
+    }
+
+    #sendBtn:hover,
+    #micBtn:hover {
+      filter: brightness(1.15);
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1 class="logo">MAX AI</h1>
+    <p class="subtitle">You coding assistant</p>
+    <p class="credits">Developed by Pranov</p>
+    <button id="logoutBtn">Logout</button>
+  </div>
+
+  <div class="chat-container">
+    <div class="messages" id="chat-messages"></div>
+
+    <div class="input-area">
+      <textarea
+        id="messageInput"
+        placeholder="Type your message (use 'image:...' or 'code ...' for special output)"
+      ></textarea>
+      <button id="micBtn">🎤</button>
+      <button id="sendBtn">➤</button>
+    </div>
+  </div>
+
+<div class="history-controls">
+    <button id="restore-history-btn" class="btn">
+        🔄 Restore Chat History
+    </button>
+</div>
+
+  <script>
+    const messagesEl = document.getElementById("chat-messages");
+    const input = document.getElementById("messageInput");
+    const sendBtn = document.getElementById("sendBtn");
+    const micBtn = document.getElementById("micMenuBar");
+
+    // Logout button
+    document.getElementById("logoutBtn").addEventListener("click", () => {
+      fetch("/logout", { method: "GET" })
+        .then(() => window.location.reload());
+    });
+
+    // Mic button / speech recognition setup
+    let recognition;
+    let micActive = false;
+
+    try {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.lang = "en-US";
+
+        recognition.onresult = (event) => {
+          const transcript = event.results[0][0].transcript.trim();
+          if (transcript) {
+            input.value = transcript;
+            sendMessage();
+          }
+        };
+
+        recognition.onend = () => {
+          micBtn.disabled = false;
+          micBtn.textContent = "🎤";
+        };
+
+        recognition.onerror = (event) => {
+          micBtn.disabled = false;
+          micBtn.textContent = "🎤";
+        };
+      }
+    } catch (e) {
+      micBtn.disabled = true;
+      micBtn.title = "Your browser does not support speech recognition.";
+    }
+
+    // Create message view with code blocks and copy button
+    function createMessageEl(content, isUser = false) {
+      const msg = document.createElement("div");
+      msg.className = `message ${isUser ? "user" : "ai"}`;
+
+      const wrapper = document.createElement("div");
+      wrapper.className = "message-content-wrapper";
+
+      // Auto-detect image URLs
+      if (content.match(/https?:\/\/.*\.(png|jpg|jpeg|webp|gif|svg)(\?.*?)?/gi)) {
+        const url = content.match(/https?:\/\/.*\.(png|jpg|jpeg|webp|gif|svg)(\?.*?)?/gi)[0];
+        const link = document.createElement("a");
+        link.href = url;
+        link.target = "_blank";
+        link.className = "image-link";
+        link.textContent = "🖼️ View generated image";
+        wrapper.appendChild(link);
+      }
+      // Auto-detect code blocks
+      else if (content.match(/```/)) {
+        let html = "";
+        const parts = content.split(/```/g);
+
+        for (let i = 0; i < parts.length; i++) {
+          if (i % 2 === 1) {
+            const langLine = parts[i];
+            const lang = langLine.split(/\s+/)[0] || "txt";
+            const code = langLine.slice(lang.length).trim();
+
+            const block = document.createElement("div");
+            block.className = "code-block";
+
+            const header = document.createElement("div");
+            header.className = "code-header";
+            header.innerHTML = `
+              <span class="language">${lang}</span>
+              <button class="copy-btn" onclick="copyCode(this)">📋 Copy</button>
+            `;
+
+            const contentEl = document.createElement("pre");
+            contentEl.className = "code-content";
+            contentEl.textContent = code;
+
+            block.appendChild(header);
+            block.appendChild(contentEl);
+            html += block.outerHTML;
+          } else {
+            if (parts[i].trim()) {
+              html += `<p>${escapeHtml(parts[i])}</p>`;
+            }
+          }
+        }
+
+        wrapper.innerHTML = html;
+      }
+      // Plain text
+      else {
+        wrapper.textContent = content;
+      }
+
+      msg.appendChild(wrapper);
+      return msg;
+    }
+
+    function copyCode(btn) {
+      const block = btn.closest(".code-block");
+      const codeText = block.querySelector("pre.code-content").textContent;
+      navigator.clipboard
+        .writeText(codeText)
+        .then(() => {
+          btn.textContent = "✅ Copied!";
+          setTimeout(() => { btn.textContent = "📋 Copy"; }, 2000);
+        })
+        .catch(() => { btn.textContent = "❌ Error"; });
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement("div");
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function addMessage(content, isUser = false) {
+      const el = createMessageEl(content, isUser);
+      messagesEl.appendChild(el);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    async function sendMessage() {
+      const value = input.value.trim();
+      if (!value) return;
+
+      addMessage(value, true);
+      input.value = "";
+
+      try {
+        const res = await fetch("/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: value })
+        });
+        const data = await res.json();
+        addMessage(data.reply);
+      } catch (err) {
+        addMessage("❌ Error: " + err.message);
+      }
+    }
+
+    // Send button click
+    sendBtn.addEventListener("click", sendMessage);
+
+    // Enter key sends (Shift+Enter for new line)
+    input.addEventListener("keypress", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    // Mic button click (toggle)
+    micBtn.addEventListener("click", () => {
+      if (!recognition) return;
+      if (!micActive) {
+        micBtn.disabled = true;
+        micBtn.textContent = "🛑";
+        recognition.start();
+      } else {
+        recognition.stop();
+        micBtn.textContent = "🎤";
+        micBtn.disabled = false;
+      }
+      micActive = !micActive;
+    });
+  
+document.getElementById("restore-history-btn").addEventListener("click", async () => {
+    try {
+        const resp = await fetch("/restore_history", { method: "GET" });
+        const data = await resp.json();
+
+        if (resp.ok && data.history) {
+            // Clear current chat UI you are showing
+            const messagesDiv = document.getElementById("messages"); // or your chat container
+            messagesDiv.innerHTML = "";
+
+            data.history.forEach(msg => {
+                const bubble = document.createElement("div");
+                bubble.className = msg.role === "user" ? "user-message" : "assistant-message";
+                bubble.textContent = msg.content;
+                messagesDiv.appendChild(bubble);
+            });
+        }
+    } catch (err) {
+        console.error("Failed to restore history:", err);
+        alert("Failed to restore chat history.");
+    }
+});
+</script>
+</body>
+</html>
