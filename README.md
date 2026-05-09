@@ -20,7 +20,7 @@ Max-AI can generate code, answer questions, and provide interactive responses th
 - **Frontend:** HTML, CSS, Jinja2 templates
 - **AI Model:** Meta LLaMA 3.3 70B (via API)
 - **Authentication:** Google OAuth
-- **Deployment:** Vercel / Local server
+- **Deployment:** GitHub / Local server
 
 ---
 
