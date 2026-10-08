@@ -30,8 +30,8 @@
 
     .logo {
       color: #e53935;  /* red */
-      font-size: 42px;       /* much bigger */
-      font-weight: 900;      /* very bold */
+      font-size: 42px;
+      font-weight: 900;
       font-style: italic;
       margin: 0;
     }
@@ -47,18 +47,39 @@
       margin-top: 5px;
     }
 
-    #logoutBtn {
+    .model-badge {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      background: #263238;
+      color: #80cbc4;
+    }
+
+    .model-badge.offline {
+      color: #ef9a9a;
+    }
+
+    .header-actions {
       position: absolute;
       top: 16px;
       right: 20px;
-      background: #e53935;
-      color: white;
+      display: flex;
+      gap: 8px;
+    }
+
+    .header-actions button {
       border: none;
-      padding: 8px 16px;
+      padding: 8px 14px;
       border-radius: 5px;
       cursor: pointer;
       font-size: 14px;
+      color: white;
     }
+
+    #logoutBtn { background: #e53935; }
+    #historyBtn, #clearBtn { background: #37474f; }
 
     .chat-container {
       flex: 1;
@@ -68,6 +89,7 @@
       width: 100%;
       margin: 0 auto;
       padding: 10px;
+      min-height: 0;
     }
 
     .messages {
@@ -95,6 +117,8 @@
     .message-content-wrapper {
       max-width: 85%;
       padding: 10px 14px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
     }
 
     .message.ai .message-content-wrapper {
@@ -109,6 +133,11 @@
       border-radius: 12px 12px 0 12px;
     }
 
+    .message.thinking .message-content-wrapper {
+      color: #607d8b;
+      font-style: italic;
+    }
+
     .code-block {
       background: #0d1117;
       border: 1px solid #21262d;
@@ -117,6 +146,7 @@
       margin: 8px 0;
       font-family: 'Courier New', monospace;
       position: relative;
+      white-space: normal;
     }
 
     .code-header {
@@ -154,13 +184,6 @@
       color: #e6e6e6;
     }
 
-    .image-link {
-      color: #bbdefb;
-      text-decoration: underline;
-      display: inline-block;
-      margin: 5px 0;
-    }
-
     .input-area {
       display: flex;
       align-items: center;
@@ -196,14 +219,6 @@
       justify-content: center;
       font-size: 20px;
       cursor: pointer;
-    }
-
-    #sendBtn {
-      background: #29b6f6;
-      color: #ffffff;
-    }
-
-    #micBtn {
       background: #29b6f6;
       color: #ffffff;
     }
@@ -212,151 +227,146 @@
     #micBtn:hover {
       filter: brightness(1.15);
     }
+
+    #sendBtn:disabled,
+    #micBtn:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    @media (max-width: 640px) {
+      .header-actions { position: static; justify-content: center; margin-top: 10px; }
+      .logo { font-size: 32px; }
+    }
   </style>
 </head>
 <body>
   <div class="header">
     <h1 class="logo">MAX AI</h1>
-    <p class="subtitle">You coding assistant</p>
+    <p class="subtitle">Your coding assistant</p>
     <p class="credits">Developed by Pranov</p>
-    <button id="logoutBtn">Logout</button>
+    <span class="model-badge" id="modelBadge">Loading model…</span>
+    <div class="header-actions">
+      <button id="historyBtn" title="Load your previous messages">🔄 History</button>
+      <button id="clearBtn" title="Delete your chat history">🗑️ Clear</button>
+      <button id="logoutBtn">Logout</button>
+    </div>
   </div>
 
   <div class="chat-container">
     <div class="messages" id="chat-messages"></div>
 
     <div class="input-area">
-      <textarea
-        id="messageInput"
-        placeholder="Type your message (use 'image:...' or 'code ...' for special output)"
-      ></textarea>
-      <button id="micBtn">🎤</button>
-      <button id="sendBtn">➤</button>
+      <textarea id="messageInput" rows="1" placeholder="Ask Max about code…"></textarea>
+      <button id="micBtn" title="Speak your message">🎤</button>
+      <button id="sendBtn" title="Send">➤</button>
     </div>
   </div>
-
-<div class="history-controls">
-    <button id="restore-history-btn" class="btn">
-        🔄 Restore Chat History
-    </button>
-</div>
 
   <script>
     const messagesEl = document.getElementById("chat-messages");
     const input = document.getElementById("messageInput");
     const sendBtn = document.getElementById("sendBtn");
-    const micBtn = document.getElementById("micMenuBar");
+    const micBtn = document.getElementById("micBtn");
+    const badge = document.getElementById("modelBadge");
 
-    // Logout button
+    // Which model is answering?
+    fetch("/model_info")
+      .then(r => r.json())
+      .then(info => {
+        if (info.ready) {
+          badge.textContent = "Model: " + info.model + " · no external API";
+        } else {
+          badge.textContent = "Model offline — " + info.error;
+          badge.classList.add("offline");
+        }
+      })
+      .catch(() => { badge.textContent = "Model status unknown"; });
+
     document.getElementById("logoutBtn").addEventListener("click", () => {
-      fetch("/logout", { method: "GET" })
-        .then(() => window.location.reload());
+      window.location.href = "/logout";
     });
 
-    // Mic button / speech recognition setup
-    let recognition;
+    // Speech recognition (if the browser supports it)
+    let recognition = null;
     let micActive = false;
-
-    try {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        recognition = new SpeechRecognition();
-        recognition.continuous = false;
-        recognition.interimResults = false;
-        recognition.lang = "en-US";
-
-        recognition.onresult = (event) => {
-          const transcript = event.results[0][0].transcript.trim();
-          if (transcript) {
-            input.value = transcript;
-            sendMessage();
-          }
-        };
-
-        recognition.onend = () => {
-          micBtn.disabled = false;
-          micBtn.textContent = "🎤";
-        };
-
-        recognition.onerror = (event) => {
-          micBtn.disabled = false;
-          micBtn.textContent = "🎤";
-        };
-      }
-    } catch (e) {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = "en-US";
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript.trim();
+        if (transcript) {
+          input.value = transcript;
+          sendMessage();
+        }
+      };
+      recognition.onend = recognition.onerror = () => {
+        micActive = false;
+        micBtn.textContent = "🎤";
+      };
+    } else {
       micBtn.disabled = true;
       micBtn.title = "Your browser does not support speech recognition.";
     }
 
-    // Create message view with code blocks and copy button
+    micBtn.addEventListener("click", () => {
+      if (!recognition) return;
+      if (micActive) {
+        recognition.stop();
+      } else {
+        micBtn.textContent = "🛑";
+        recognition.start();
+        micActive = true;
+      }
+    });
+
+    // Render a message, turning ```fenced``` code into copyable blocks
     function createMessageEl(content, isUser = false) {
       const msg = document.createElement("div");
       msg.className = `message ${isUser ? "user" : "ai"}`;
-
       const wrapper = document.createElement("div");
       wrapper.className = "message-content-wrapper";
 
-      // Auto-detect image URLs
-      if (content.match(/https?:\/\/.*\.(png|jpg|jpeg|webp|gif|svg)(\?.*?)?/gi)) {
-        const url = content.match(/https?:\/\/.*\.(png|jpg|jpeg|webp|gif|svg)(\?.*?)?/gi)[0];
-        const link = document.createElement("a");
-        link.href = url;
-        link.target = "_blank";
-        link.className = "image-link";
-        link.textContent = "🖼️ View generated image";
-        wrapper.appendChild(link);
-      }
-      // Auto-detect code blocks
-      else if (content.match(/```/)) {
-        let html = "";
-        const parts = content.split(/```/g);
+      const parts = content.split(/```/g);
+      parts.forEach((part, i) => {
+        if (i % 2 === 1) {
+          const firstLine = part.split("\n")[0].trim();
+          const lang = /^[\w+#.-]+$/.test(firstLine) ? firstLine : "code";
+          const code = (lang === "code" ? part : part.slice(part.indexOf("\n") + 1)).replace(/\n$/, "");
 
-        for (let i = 0; i < parts.length; i++) {
-          if (i % 2 === 1) {
-            const langLine = parts[i];
-            const lang = langLine.split(/\s+/)[0] || "txt";
-            const code = langLine.slice(lang.length).trim();
-
-            const block = document.createElement("div");
-            block.className = "code-block";
-
-            const header = document.createElement("div");
-            header.className = "code-header";
-            header.innerHTML = `
-              <span class="language">${lang}</span>
-              <button class="copy-btn" onclick="copyCode(this)">📋 Copy</button>
-            `;
-
-            const contentEl = document.createElement("pre");
-            contentEl.className = "code-content";
-            contentEl.textContent = code;
-
-            block.appendChild(header);
-            block.appendChild(contentEl);
-            html += block.outerHTML;
-          } else {
-            if (parts[i].trim()) {
-              html += `<p>${escapeHtml(parts[i])}</p>`;
-            }
-          }
+          const block = document.createElement("div");
+          block.className = "code-block";
+          const header = document.createElement("div");
+          header.className = "code-header";
+          const langEl = document.createElement("span");
+          langEl.className = "language";
+          langEl.textContent = lang;
+          const copy = document.createElement("button");
+          copy.className = "copy-btn";
+          copy.textContent = "📋 Copy";
+          copy.addEventListener("click", () => copyCode(copy, code));
+          header.append(langEl, copy);
+          const pre = document.createElement("pre");
+          pre.className = "code-content";
+          pre.textContent = code;
+          block.append(header, pre);
+          wrapper.appendChild(block);
+        } else if (part.trim()) {
+          const p = document.createElement("div");
+          p.textContent = part.trim();
+          wrapper.appendChild(p);
         }
-
-        wrapper.innerHTML = html;
-      }
-      // Plain text
-      else {
-        wrapper.textContent = content;
-      }
+      });
 
       msg.appendChild(wrapper);
       return msg;
     }
 
-    function copyCode(btn) {
-      const block = btn.closest(".code-block");
-      const codeText = block.querySelector("pre.code-content").textContent;
-      navigator.clipboard
-        .writeText(codeText)
+    function copyCode(btn, code) {
+      navigator.clipboard.writeText(code)
         .then(() => {
           btn.textContent = "✅ Copied!";
           setTimeout(() => { btn.textContent = "📋 Copy"; }, 2000);
@@ -364,24 +374,22 @@
         .catch(() => { btn.textContent = "❌ Error"; });
     }
 
-    function escapeHtml(text) {
-      const div = document.createElement("div");
-      div.textContent = text;
-      return div.innerHTML;
-    }
-
     function addMessage(content, isUser = false) {
       const el = createMessageEl(content, isUser);
       messagesEl.appendChild(el);
       messagesEl.scrollTop = messagesEl.scrollHeight;
+      return el;
     }
 
     async function sendMessage() {
       const value = input.value.trim();
-      if (!value) return;
+      if (!value || sendBtn.disabled) return;
 
       addMessage(value, true);
       input.value = "";
+      sendBtn.disabled = true;
+      const thinking = addMessage("Max is thinking…");
+      thinking.classList.add("thinking");
 
       try {
         const res = await fetch("/chat", {
@@ -389,61 +397,50 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: value })
         });
+        if (res.status === 401) {
+          window.location.href = "/login";
+          return;
+        }
         const data = await res.json();
-        addMessage(data.reply);
+        thinking.remove();
+        addMessage(data.reply || data.error || "No reply.");
       } catch (err) {
+        thinking.remove();
         addMessage("❌ Error: " + err.message);
+      } finally {
+        sendBtn.disabled = false;
+        input.focus();
       }
     }
 
-    // Send button click
     sendBtn.addEventListener("click", sendMessage);
-
-    // Enter key sends (Shift+Enter for new line)
-    input.addEventListener("keypress", (e) => {
+    input.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         sendMessage();
       }
     });
 
-    // Mic button click (toggle)
-    micBtn.addEventListener("click", () => {
-      if (!recognition) return;
-      if (!micActive) {
-        micBtn.disabled = true;
-        micBtn.textContent = "🛑";
-        recognition.start();
-      } else {
-        recognition.stop();
-        micBtn.textContent = "🎤";
-        micBtn.disabled = false;
-      }
-      micActive = !micActive;
-    });
-  
-document.getElementById("restore-history-btn").addEventListener("click", async () => {
-    try {
-        const resp = await fetch("/restore_history", { method: "GET" });
+    document.getElementById("historyBtn").addEventListener("click", async () => {
+      try {
+        const resp = await fetch("/restore_history");
         const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || resp.status);
+        messagesEl.innerHTML = "";
+        if (!data.history.length) addMessage("No saved messages yet.");
+        data.history.forEach(m => addMessage(m.content, m.role === "user"));
+      } catch (err) {
+        addMessage("❌ Could not load history: " + err.message);
+      }
+    });
 
-        if (resp.ok && data.history) {
-            // Clear current chat UI you are showing
-            const messagesDiv = document.getElementById("messages"); // or your chat container
-            messagesDiv.innerHTML = "";
+    document.getElementById("clearBtn").addEventListener("click", async () => {
+      if (!confirm("Delete your whole chat history?")) return;
+      await fetch("/clear_history", { method: "POST" });
+      messagesEl.innerHTML = "";
+    });
 
-            data.history.forEach(msg => {
-                const bubble = document.createElement("div");
-                bubble.className = msg.role === "user" ? "user-message" : "assistant-message";
-                bubble.textContent = msg.content;
-                messagesDiv.appendChild(bubble);
-            });
-        }
-    } catch (err) {
-        console.error("Failed to restore history:", err);
-        alert("Failed to restore chat history.");
-    }
-});
-</script>
+    addMessage("Hi! I'm Max, your coding assistant. Ask me anything about code.");
+  </script>
 </body>
 </html>

@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 .env
 venv/
+maxgpt/checkpoints/optimizer.npz
+maxgpt/data/unanswered.txt
