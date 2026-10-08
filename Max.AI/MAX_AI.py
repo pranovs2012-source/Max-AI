@@ -1,6 +1,7 @@
 """Max AI — Flask chat app powered by MaxGPT, Max's own language model (no external API)."""
 import os
 import secrets
+import shutil
 import sqlite3
 
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
@@ -10,7 +11,14 @@ from llm_backends import get_backend
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE_DIR = os.path.join(HERE, "Templates" if os.path.isdir(os.path.join(HERE, "Templates")) else "templates")
-DATABASE = os.path.join(HERE, "maxlog.db")
+DATABASE = os.environ.get("MAX_AI_DB") or os.path.join(HERE, "maxlog.db")
+if os.environ.get("VERCEL") and not os.environ.get("MAX_AI_DB"):
+    # Vercel's file system is read-only except /tmp, and /tmp is wiped when the function
+    # goes cold. Work on a copy there; for permanent accounts use a hosted database.
+    tmp_db = "/tmp/maxlog.db"
+    if not os.path.exists(tmp_db) and os.path.exists(DATABASE):
+        shutil.copy(DATABASE, tmp_db)
+    DATABASE = tmp_db
 HISTORY_TURNS = 10  # how many recent messages are sent to the model as context
 
 app = Flask(__name__, template_folder=TEMPLATE_DIR)

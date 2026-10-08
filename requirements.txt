@@ -1,0 +1,5 @@
+# Installed by Vercel for api/index.py (the app itself lives in Max.AI/)
+flask>=2.2
+werkzeug>=2.2
+numpy>=1.22
+google-auth>=2.0
