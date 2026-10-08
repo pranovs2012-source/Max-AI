@@ -132,6 +132,8 @@ class GPT:
         """Sample tokens one at a time. Yields each new token id."""
         rng = rng or np.random.default_rng()
         ids = list(ids)[-self.config.n_ctx:]
+        generated = []  # the repetition penalty looks only at Max's own words, not the prompt:
+                        # an answer should be free to reuse words from the question and search results
         cache, pending = [None] * self.config.n_layer, list(ids)
         with ag.no_grad():
             for _ in range(max_new_tokens):
@@ -139,8 +141,8 @@ class GPT:
                     ids = ids[-self.config.n_ctx:]
                     cache, pending = [None] * self.config.n_layer, list(ids)
                 logits = self._infer(np.array(pending), cache).astype(np.float64)
-                if repetition_penalty != 1.0:
-                    recent = list(set(ids[-64:]))
+                if repetition_penalty != 1.0 and generated:
+                    recent = list(set(generated[-64:]))
                     r = logits[recent]
                     logits[recent] = np.where(r > 0, r / repetition_penalty, r * repetition_penalty)
                 if temperature <= 0:
@@ -161,6 +163,7 @@ class GPT:
                 if nxt in stop_ids:
                     return
                 ids.append(nxt)
+                generated.append(nxt)
                 pending = [nxt]
                 yield nxt
 

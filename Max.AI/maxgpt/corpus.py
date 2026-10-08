@@ -170,7 +170,9 @@ def encode(tok, turns):
     codes = [1] * len(ids)
     for role, text in turns:
         head = tok.encode(f"<|{role}|>")
-        body = tok.encode(text, allow_special=False) + [tok.special["<|end|>"]]
+        # Answers start with a space, so their first word is the same token as in the passage it
+        # comes from (" Space", not "Space") — copying facts from search results gets much easier.
+        body = tok.encode((" " + text) if role == "assistant" else text, allow_special=False) + [tok.special["<|end|>"]]
         ids += head + body
         codes += [0] * len(head) + [2 if role == "assistant" else 1] * len(body)
     return ids, codes
@@ -192,6 +194,7 @@ def main(argv=None):
     ap.add_argument("--squad", default=SQUAD_URL, help="path or URL ('' to skip)")
     ap.add_argument("--vocab", type=int, default=8192)
     ap.add_argument("--seed", type=int, default=7)
+    ap.add_argument("--tokenizer", default="", help="reuse this tokenizer.json (to continue training a model)")
     args = ap.parse_args(argv)
     rng = random.Random(args.seed)
     cache = os.path.join(args.out, "downloads")
@@ -209,8 +212,11 @@ def main(argv=None):
 
     sample_text = "\n".join(t for _, turns in examples[:60000] for _, t in turns)[:30_000_000]
     print(f"training tokenizer (vocab {args.vocab}) on {len(sample_text):,} characters", flush=True)
-    tok = Tokenizer.train(SYSTEM_PROMPT + "\n" + sample_text, vocab_size=args.vocab, verbose=True)
     os.makedirs(args.out, exist_ok=True)
+    if args.tokenizer:
+        tok = Tokenizer.load(args.tokenizer)
+    else:
+        tok = Tokenizer.train(SYSTEM_PROMPT + "\n" + sample_text, vocab_size=args.vocab, verbose=True)
     tok.save(os.path.join(args.out, "tokenizer.json"))
 
     encoded = [encode(tok, turns) for _, turns in examples]
