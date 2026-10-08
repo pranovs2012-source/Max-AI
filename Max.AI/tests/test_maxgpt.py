@@ -107,6 +107,33 @@ class GuardTest(unittest.TestCase):
         self.assertEqual(self.guard.match("thanks!", previous="What is Python?"), [("user", "thanks!")])
         self.assertIsNone(self.guard.match("What is Kubernetes?"))
 
+    def test_topic_carries_over(self):
+        from maxgpt.guard import KnowledgeGuard
+        facts = ""
+        for country, capital, currency, language in [("Japan", "Tokyo", "yen", "Japanese"),
+                                                     ("Kenya", "Nairobi", "shilling", "Swahili"),
+                                                     ("India", "New Delhi", "rupee", "Hindi")]:
+            facts += (f"===\nUser: What is the capital of {country}?\nMax: {capital}.\n"
+                      f"===\nUser: What currency does {country} use?\nMax: The {currency}.\n"
+                      f"===\nUser: What language is spoken in {country}?\nMax: {language}.\n")
+        facts += ("===\nUser: Tell me about Saturn\nMax: The sixth planet.\n"
+                  "===\nUser: How many bones does an adult have?\nMax: 206.\n")
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8") as f:
+            f.write(facts)
+        self.addCleanup(os.remove, f.name)
+        guard = KnowledgeGuard([f.name], threshold=0.5)
+        # a short follow-up keeps the subject of the conversation
+        self.assertEqual(guard.match("And its currency?", previous="What is the capital of Japan?"),
+                         [("user", "What currency does Japan use?")])
+        self.assertEqual(guard.match("what language do they speak there?", previous="And its currency?",
+                                     context="What is the capital of Japan? And its currency?"),
+                         [("user", "What language is spoken in Japan?")])
+        # a complete new question is answered as asked
+        self.assertEqual(guard.match("What is the capital of Kenya?", previous="What is the capital of Japan?"),
+                         [("user", "What is the capital of Kenya?")])
+        # a word in common is not enough when the topic differs
+        self.assertIsNone(guard.match("how many moons does it have?", previous="Tell me about Saturn"))
+
 
 class CalcTest(unittest.TestCase):
     def test_arithmetic(self):
@@ -114,6 +141,8 @@ class CalcTest(unittest.TestCase):
         self.assertEqual(calc.answer("What is 7 * 8?"), "7 * 8 = 56")
         self.assertEqual(calc.answer("12 divided by 4"), "12 / 4 = 3")
         self.assertEqual(calc.answer("what's (2 + 3) times 4"), "(2 + 3) * 4 = 20")
+        self.assertEqual(calc.answer("What is 15% of 200?"), "15% of 200 = 30")
+        self.assertEqual(calc.answer("12.5 percent of 80"), "12.5% of 80 = 10")
         self.assertIsNone(calc.answer("What is Python?"))
         self.assertIsNone(calc.answer("1 / 0"))
         self.assertIsNone(calc.answer("__import__('os')"))

@@ -62,7 +62,9 @@ class MaxGPTEngine:
             yield result
             return
         if self.guard:
-            prompt_turns = self.guard.match(question, previous)
+            # Earlier questions, the most recent counted twice, to carry the topic of the chat over.
+            context = " ".join(asked[-3:-2] + asked[-2:-1] * 2) or None
+            prompt_turns = self.guard.match(question, previous, context)
             if prompt_turns is None:
                 self.guard.log_unknown(question)
                 yield UNKNOWN_REPLY
