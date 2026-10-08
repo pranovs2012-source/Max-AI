@@ -376,6 +376,8 @@ class Assistant:
                     break
         if name_col is None:
             return None
+        if measure and not measure_hit:
+            return None          # "fastest" needs a speed column, not a list of TV episodes
         score = math.log(len(rows) + 1) + (6 if measure_hit else 0)
         score += 2 * len(qt & set(terms(title + " " + table["caption"])))
         score -= 3 * Assistant.extra_words(title, qt)
@@ -419,20 +421,31 @@ class Assistant:
             query = " ".join(dict.fromkeys(terms(previous) + terms(q)))
         return query
 
+    def is_follow_up(self, q, previous):
+        words = set(re.findall(r"[\w']+", q.lower()))
+        return bool(previous) and (bool(PRONOUNS & words) or len(terms(q)) <= 1)
+
     def lookup(self, q, previous, th, lang):
-        query = self.subject(q, previous)
-        site = f"{lang}.wikipedia.org"
-        hits = web.search(query, limit=5, lang=lang)
-        if not hits and query != q:
-            hits = web.search(q, limit=5, lang=lang)
-        th.step("Searching Wikipedia", f"{site} · “{query}” → {len(hits)} results")
+        follow = self.is_follow_up(q, previous) and lang == "en"
+        if follow:
+            # "how tall is it?" after "What is the Eiffel Tower?": find the Eiffel Tower first
+            topic = " ".join(terms(previous))
+            hits = web.search(topic, limit=5, lang=lang)
+            th.step("Working out what “it” refers to", f"Earlier topic: “{topic}”")
+            query = topic
+        else:
+            query = self.subject(q, previous)
+            hits = web.search(query, limit=5, lang=lang)
+            if not hits and query != q:
+                hits = web.search(q, limit=5, lang=lang)
+        th.step("Searching Wikipedia", f"{lang}.wikipedia.org · “{query}” → {len(hits)} results")
         if not hits:
             return None
         qt = set(terms(query))
         order = {h["title"]: i for i, h in enumerate(hits)}
         hits.sort(key=lambda h: (-(2 * len(qt & set(terms(h["title"]))) - 0.8 * self.extra_words(h["title"], qt)
                                    + 0.2 * len(qt & set(terms(h["snippet"])))), order[h["title"]]))
-        titles = [h["title"] for h in hits[:3]]
+        titles = [h["title"] for h in hits[:1 if follow else 3]]
         pages = web.articles(titles, lang=lang)
         # keep the main article, plus others only if they're about the same thing
         pages = pages[:1] + [p for p in pages[1:] if self.extra_words(p["title"], qt) <= 1]
@@ -446,13 +459,15 @@ class Assistant:
         self.set_card(top, th)
         for p in pages:
             th.source(f"Wikipedia: {p['title']}", p["url"])
-        sentences = self.best_sentences(q, pages, context=query)
-        # If the intro doesn't contain the answer, read the whole top article.
-        if not any(s[1] > 0 for s in sentences[1:]) and self.needs_detail(q):
+        context = query if not follow else query + " " + " ".join(terms(q))
+        sentences = self.best_sentences(q, pages, context=context)
+        # If the intro doesn't answer it, read the whole main article.
+        answered = any(set(terms(s)) & set(terms(q)) for s, _ in sentences)
+        if (follow or self.needs_detail(q)) and not (answered and sentences and sentences[0][1] >= 2):
             full = web.articles([top["title"]], lang=lang, intro=False)
             if full:
                 th.step("Reading the full article", top["title"])
-                sentences = self.best_sentences(q, [dict(top, extract=full[0]["extract"])] + pages[1:], context=query)
+                sentences = self.best_sentences(q, [dict(top, extract=full[0]["extract"])] + pages[1:], context=context)
         th.step("Picking the sentences that answer it", f"{len(sentences)} sentences from {len(pages)} articles")
         return " ".join(s for s, _ in sentences)
 
