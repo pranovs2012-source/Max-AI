@@ -5,6 +5,7 @@
 Exits non-zero if a core ability is broken, so CI catches it.
 """
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -51,7 +52,7 @@ for convo in CONVERSATIONS:
     summary.append(f"[{result['route']:>9}] {' → '.join(convo)[:60]:60} | {source[:45]:45} | {' / '.join(lines[:3])[:150]}")
     if read:
         summary.append(" " * 12 + "read: " + read[:200])
-    if convo[0] == "top 10 fastest cars" and sum(l[:3].rstrip(".").isdigit() for l in result["reply"].splitlines()) < 5:
+    if convo[0] == "top 10 fastest cars" and sum(bool(re.match(r"\d+\.\s", l)) for l in result["reply"].splitlines()) < 5:
         failures.append("ranking list")
     if convo[0] == "Who is Elon Musk?" and "2002" not in result["reply"]:
         failures.append("follow-up lookup")
