@@ -126,21 +126,34 @@ class PackedData:
         self.tokens = int(sum(len(e[0]) for e in self.examples))
 
     def windows(self):
-        """One epoch of windows: examples in random order, packed greedily without splitting."""
-        order = self.rng.permutation(len(self.examples))
+        """One epoch of windows: examples in random order, packed whole with best-fit filling
+        (when the next example doesn't fit, a shorter upcoming one that does is used instead)."""
         size = self.n_ctx + 1
-        cur_ids, cur_w = [], []
-        for i in order:
+        pieces = []
+        for i in self.rng.permutation(len(self.examples)):
             ids, w = self.examples[i]
             for s in range(0, len(ids), self.n_ctx):        # very long examples are split
-                pi, pw = ids[s:s + size], w[s:s + size]
-                if len(pi) < 2:
-                    continue
-                if sum(len(x) for x in cur_ids) + len(pi) > size and cur_ids:
-                    yield self._finish(cur_ids, cur_w)
-                    cur_ids, cur_w = [], []
-                cur_ids.append(pi)
-                cur_w.append(pw)
+                if len(ids[s:s + size]) >= 2:
+                    pieces.append((ids[s:s + size], w[s:s + size]))
+        cur_ids, cur_w, used, j, lookahead = [], [], 0, 0, 64
+        while j < len(pieces):
+            if pieces[j] is None:
+                j += 1
+                continue
+            pi, pw = pieces[j]
+            if used + len(pi) <= size:
+                cur_ids.append(pi); cur_w.append(pw); used += len(pi)
+                pieces[j] = None
+                j += 1
+                continue
+            for k in range(j + 1, min(len(pieces), j + lookahead)):  # fill the gap if something fits
+                if pieces[k] is not None and used + len(pieces[k][0]) <= size:
+                    cur_ids.append(pieces[k][0]); cur_w.append(pieces[k][1]); used += len(pieces[k][0])
+                    pieces[k] = None
+                    if size - used < 24:
+                        break
+            yield self._finish(cur_ids, cur_w)
+            cur_ids, cur_w, used = [], [], 0
         if cur_ids:
             yield self._finish(cur_ids, cur_w)
 
@@ -251,7 +264,10 @@ def main(argv=None):
         print(f"new model: {sum(p.numel() for p in model.parameters()):,} parameters, {model.cfg}")
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, betas=(0.9, 0.95), weight_decay=0.05)
     if args.resume and os.path.exists(state_path):
-        opt.load_state_dict(torch.load(state_path)["opt"])
+        state = torch.load(state_path)
+        opt.load_state_dict(state["opt"])
+        if "model" in state:          # full-precision weights (the exported file is half precision)
+            model.load_state_dict(state["model"])
 
     pad = tok.special["<|pad|>"]
     train = PackedData(os.path.join(args.corpus, "train.npz"), model.cfg.n_ctx, pad, seed=meta["steps"])
@@ -261,7 +277,7 @@ def main(argv=None):
 
     def save(tag=""):
         model.export(model_path)
-        torch.save({"opt": opt.state_dict()}, state_path)
+        torch.save({"opt": opt.state_dict(), "model": model.state_dict()}, state_path)
         meta.update(val_loss=evaluate(model, val), config=model.cfg.__dict__, grounded=True)
         json.dump(meta, open(meta_path, "w"), indent=1)
         print(f"  saved {tag} · validation loss (answers) {meta['val_loss']:.3f}", flush=True)
