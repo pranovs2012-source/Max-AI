@@ -11,6 +11,9 @@ geography, history and everyday questions.
   (own tokenizer, own autograd engine, own training loop, own weights)
 - **Thinks before answering**: understands the question, picks a strategy, gathers facts,
   double-checks its own answer and shows every step ("🧠 Thought for 0.8s")
+- **Answers from the web in its own words**: Max searches the web (Wikipedia, DuckDuckGo, or Brave
+  Search with an API key), picks the facts that answer the question and writes the reply itself;
+  every fact is checked against the sources before it's shown
 - **Live knowledge from Wikipedia**: summaries of any topic, follow-up questions, rankings read
   from Wikipedia tables ("top 10 fastest cars"), today's world news, word definitions (Wiktionary),
   questions in Hindi, Tamil and other languages (answered from that language's Wikipedia),
@@ -127,10 +130,32 @@ Run the tests with `python -m unittest discover -s tests` (from the `Max.AI` fol
 `TEST_DATABASE_URL=postgresql://...` to test Postgres too. `python tools/live_check.py` asks Max real
 questions against live Wikipedia. Both run on GitHub in the **Max AI checks** workflow.
 
-### Model sizes
+### Big training run (GitHub Actions)
+The **Train MaxGPT** workflow (Actions tab → *Train MaxGPT* → *Run workflow*) trains the
+~8.5M-parameter model on a large corpus, in up to three chained stages of a few hours each:
+
+| Source | What Max learns |
+|---|---|
+| [Databricks Dolly 15k](https://huggingface.co/datasets/databricks/databricks-dolly-15k) (CC BY-SA 3.0) | 15,000 human-written instructions and answers: explaining, brainstorming, writing, summarising |
+| [SQuAD v1.1](https://rajpurkar.github.io/SQuAD-explorer/) (CC BY-SA 4.0) | 87,000 questions about Wikipedia paragraphs, turned into "answer from search results" lessons — with distractor results, and honest "I couldn't find it" answers when the results don't say |
+| Max's own conversations (`maxgpt/data/chat`) | who Max is, coding help, world facts, everyday questions |
+
+Training uses PyTorch for speed (`maxgpt/train_torch.py`), but the network is exactly MaxGPT's and
+the weights are exported in MaxGPT's own format, so the app still runs on NumPy alone. After every
+stage `tools/model_eval.py` grades the model (identity, everyday questions, answering from search
+results, admitting when the answer isn't there) and the new weights are committed only if they beat
+the current model.
+
+```bash
+python -m maxgpt.corpus --out corpus                     # build the corpus (downloads Dolly + SQuAD)
+python -m maxgpt.train_torch --corpus corpus --out ckpt --minutes 60
+python tools/model_eval.py ckpt                          # grade it
+```
+
+### Small local models (NumPy only)
 ```bash
 python -m maxgpt.train --preset small              # ~1.1M parameters, quick
-python -m maxgpt.train --preset base --steps 8000  # ~3.5M parameters (used by the GitHub workflow)
+python -m maxgpt.train --preset base --steps 8000  # ~3.5M parameters
 python -m maxgpt.train --resume --steps 2000       # keep training the current model
 ```
 
@@ -173,6 +198,7 @@ MAXGPT_TEMPERATURE=0.6                   # lower = more focused answers
 DATABASE_URL=postgresql://...             # Neon / Supabase Postgres (users and chat history)
 ELEVENLABS_API_KEY=...                   # Max's voice
 ELEVENLABS_VOICE_ID=onwK4e9ZLuTAKqWW03F9 # optional: any ElevenLabs voice
-MAX_AI_WEB=1                             # 0 = answer only from the trained model, no Wikipedia
+MAX_AI_WEB=1                             # 0 = answer only from the trained model, no web
+BRAVE_API_KEY=...                        # optional: real web search results (brave.com/search/api)
 ```
 Never commit API keys or secrets to the repository.
