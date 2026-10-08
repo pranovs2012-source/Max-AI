@@ -11,6 +11,7 @@ Max's own data, and runs on your own machine.
   (own tokenizer, own autograd engine, own training loop, own weights)
 - **Knowledge guard**: Max says honestly when a topic is outside what it has learned,
   instead of making things up, and logs the question so you can teach it
+- Exact answers for arithmetic ("what is 7 * 8") from a safe built-in calculator
 - Chat with memory of the recent conversation, saved per user in SQLite
 - Code blocks with one-click copy, voice input, chat history restore / clear
 - Email + password login and optional Google sign-in
@@ -45,6 +46,21 @@ automatically whenever the model code or training data changes — or run it you
 
 ---
 
+## ▲ Deploying on Vercel
+The repository is ready for Vercel: `api/index.py` serves the Flask app, `vercel.json` routes
+every request to it and the root `requirements.txt` lists what Vercel installs. Every push to
+`main` redeploys automatically.
+
+In the Vercel project settings → **Environment Variables**, add:
+- `FLASK_SECRET_KEY` — any long random string (otherwise users get logged out between requests)
+
+> Vercel's disk is read-only except `/tmp`, which is wiped when the app goes idle. On Vercel the
+> app works on a copy of `maxlog.db` in `/tmp`, so **new accounts and chat history are temporary**.
+> For permanent accounts, host the app somewhere with a persistent disk (Render, Railway, a VPS)
+> or point `MAX_AI_DB` at a database file on persistent storage.
+
+---
+
 ## 🧠 How MaxGPT works
 | File | What it does |
 |---|---|
@@ -54,10 +70,11 @@ automatically whenever the model code or training data changes — or run it you
 | `maxgpt/optim.py` | AdamW optimizer, gradient clipping, warmup + cosine learning rate |
 | `maxgpt/data.py` | Loads chat transcripts and text, learns only Max's replies, rewords questions for robustness |
 | `maxgpt/guard.py` | Knowledge guard: checks whether a question is close to something Max learned |
+| `maxgpt/calc.py` | Safe calculator for arithmetic questions |
 | `maxgpt/train.py` | Training script with presets, validation and checkpoints |
 | `maxgpt/chat.py` | Chat engine (used by the app) and a terminal chat: `python -m maxgpt.chat` |
 | `llm_backends.py` | Picks the backend: `maxgpt` (default) or `gguf` |
-| `tests/` | Gradient checks for every operation, tokenizer, data, guard and model tests |
+| `tests/` | Gradient checks for every operation, tokenizer, data, guard, calculator and model tests |
 
 Run the tests with `python -m unittest discover -s tests` (from the `Max.AI` folder).
 
@@ -104,5 +121,6 @@ FLASK_SECRET_KEY=a_long_random_string    # keeps logins valid across restarts
 GOOGLE_CLIENT_ID=your_google_client_id   # for Google sign-in
 MAX_AI_BACKEND=maxgpt                    # or gguf
 MAXGPT_TEMPERATURE=0.6                   # lower = more focused answers
+MAX_AI_DB=/path/to/maxlog.db             # where users and chat history are stored
 ```
 Never commit API keys or secrets to the repository.
