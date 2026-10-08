@@ -57,6 +57,8 @@ MEASURES = [
     (r"new|recent|latest", ["year", "date", "released"], True),
     (r"valuable|revenue|biggest compan", ["revenue", "market", "value", "valuation"], True),
 ]
+NEUTRAL = set("list world global all time ever history record records the by of in and top current".split())
+TIME_HEADER = re.compile(r"0\s*[–-]|\(s\)|seconds|\btime\b|lap", re.I)
 NAME_HEADERS = ("name", "model", "car", "vehicle", "country", "city", "company", "person", "title", "building",
                 "film", "song", "album", "artist", "player", "team", "mountain", "river", "language", "game", "make")
 
@@ -66,10 +68,19 @@ SMALL_TALK = set("hi hello hey hiya yo sup thank thanks thx bye goodbye ok okay 
 
 
 def _stem(w):
+    """Light stemming so "cities"~"city", "founded"~"found", "created"~"create"."""
+    if not w.isascii():
+        return w
     if len(w) > 4 and w.endswith("ies"):
         return w[:-3] + "y"
     if len(w) > 3 and w.endswith("s") and not w.endswith(("ss", "us", "is", "ous")):
-        return w[:-1]
+        w = w[:-1]
+    if len(w) > 6 and w.endswith("ing"):
+        w = w[:-3]
+    elif len(w) > 5 and w.endswith("ed"):
+        w = w[:-2]
+    if len(w) > 4 and w.endswith("e"):
+        w = w[:-1]
     return w
 
 
@@ -116,7 +127,7 @@ class Assistant:
         if intent == "calculate":
             return th.result(calc.answer(q), "calculate")
 
-        local, score = self.recall_match(history)
+        local, score = self.recall_match(history) if lang == "en" else (None, 0.0)
         if intent in ("chat", "code") and local is not None:
             th.step("Checking what I already know", f"I know this topic (match {score:.2f})")
             return th.result(self.recall(history, th), "recall")
@@ -164,6 +175,8 @@ class Assistant:
             return "define"
         if ABOUT_MAX.search(q) and not SUPERLATIVE.search(q):
             return "chat"
+        if web.detect_language(q) != "en":
+            return "fact"
         if not terms(q) or set(terms(q)) <= SMALL_TALK:
             return "chat"  # greetings, thanks, "ok"
         if SUPERLATIVE.search(q) and len(terms(q)) >= 1:
@@ -191,6 +204,8 @@ class Assistant:
         context = " ".join(asked[-3:-2] + asked[-2:-1] * 2) or None
         turns = guard.match(q, previous, context)
         score, _ = guard.score(q)
+        if turns is not None and turns[-1][1].strip().lower() != q.strip().lower() and previous:
+            score = max(score, 0.8)
         return turns, score
 
     # ── strategies ───────────────────────────────────────────────────────────
@@ -252,7 +267,7 @@ class Assistant:
                       r"in the world|of all time|ever|ranking|ranked)\b", " ", q, flags=re.I)
         core = re.sub(r"[^\w\s\-']", " ", core).strip()
         core = re.sub(r"\s+", " ", core)
-        queries = [f"list of {core}", core]
+        queries = [f"list of {core}", core, f"{core} in the world"]
         th.step("Searching Wikipedia for rankings", " · ".join(f"“{s}”" for s in queries))
         seen, candidates = set(), []
         with ThreadPoolExecutor(4) as pool:
@@ -262,9 +277,11 @@ class Assistant:
                         seen.add(h["title"])
                         candidates.append(h["title"])
         qt = set(terms(core))
+        wanted = qt | self.measure_terms(q)
         order = {t: i for i, t in enumerate(candidates)}
-        candidates.sort(key=lambda t: (-(t.lower().startswith("list of") * 2 + len(qt & set(terms(t)))), order[t]))
-        candidates = candidates[:4]
+        candidates.sort(key=lambda t: (-(t.lower().startswith("list of") + 2 * len(wanted & set(terms(t)))
+                                         - 1.5 * self.extra_words(t, wanted)), order[t]))
+        candidates = candidates[:5]
         if not candidates:
             return None
         th.step("Reading list articles", " · ".join(candidates))
@@ -275,14 +292,15 @@ class Assistant:
             if not page_html:
                 continue
             for table in web.tables(page_html):
-                pick = self.score_table(table, q, title, qt)
+                pick = self.score_table(table, q, title, wanted)
                 if pick and (best is None or pick["score"] > best["score"]):
                     best = dict(pick, page=title)
         if best is None:
             th.step("Reading list articles", "No usable ranking table, summarising instead")
             return None
         rows = self.ranked_rows(best, want)
-        if len(rows) < 3:
+        if len(rows) < min(want, 5):
+            th.step("Extracting the table", f"Only {len(rows)} usable rows in {best['page']}, summarising instead")
             return None
         th.step("Extracting the table",
                 f"{best['page']}: {len(best['table']['rows'])} rows" +
@@ -291,6 +309,19 @@ class Assistant:
         heading = f"Here are the top {len(rows)} {core.strip()} according to Wikipedia ({best['page']}):"
         return heading + "\n\n" + "\n".join(f"{i}. {r}" for i, r in enumerate(rows, 1)) + \
             "\n\nWant more details about any of them?"
+
+    @staticmethod
+    def measure_terms(q):
+        extra = set()
+        for pattern, keys, _ in MEASURES:
+            if re.search(pattern, q.lower()):
+                extra |= set(terms(" ".join(keys)))
+        return extra
+
+    @staticmethod
+    def extra_words(title, wanted):
+        """Words in a title that narrow it beyond what was asked ("... in the United Kingdom")."""
+        return len(set(terms(title)) - wanted - NEUTRAL)
 
     @staticmethod
     def _safe_html(title):
@@ -311,7 +342,8 @@ class Assistant:
             if re.search(pattern, ql):
                 for key in keys:
                     for c, h in enumerate(headers):
-                        if key in h and sum(web.number(r[c]) is not None for r in rows) >= len(rows) * 0.6:
+                        if key in h and not TIME_HEADER.search(h) and \
+                                sum(web.number(r[c]) is not None for r in rows) >= len(rows) * 0.6:
                             value_col, descending, measure_hit = c, desc, True
                             break
                     if value_col is not None:
@@ -331,7 +363,8 @@ class Assistant:
         if name_col is None:
             return None
         score = math.log(len(rows) + 1) + (6 if measure_hit else 0)
-        score += 2 * len(qt & set(terms(title + " " + table["caption"] + " " + " ".join(headers))))
+        score += 2 * len(qt & set(terms(title + " " + table["caption"])))
+        score -= 3 * Assistant.extra_words(title, qt)
         if title.lower().startswith("list of"):
             score += 1
         return {"score": score, "table": table, "name_col": name_col, "value_col": value_col,
@@ -364,6 +397,8 @@ class Assistant:
     def subject(self, q, previous):
         """The search query: the question's key words, plus the earlier topic for follow-ups."""
         words = re.findall(r"[\w']+", q.lower())
+        if web.detect_language(q) != "en":
+            return q.strip(" ?।")                  # let that Wikipedia's own search handle the language
         query = " ".join(terms(q)) or q
         if previous and (PRONOUNS & set(words) or len(terms(q)) <= 1):
             query = " ".join(dict.fromkeys(terms(previous) + terms(q)))
@@ -378,10 +413,14 @@ class Assistant:
         th.step("Searching Wikipedia", f"{site} · “{query}” → {len(hits)} results")
         if not hits:
             return None
-        qt = set(terms(q + " " + (previous if query != " ".join(terms(q)) else "")))
-        hits.sort(key=lambda h: -len(qt & set(terms(h["title"]))) * 2 - len(qt & set(terms(h["snippet"]))) * 0.2)
+        qt = set(terms(query))
+        order = {h["title"]: i for i, h in enumerate(hits)}
+        hits.sort(key=lambda h: (-(2 * len(qt & set(terms(h["title"]))) - 0.8 * self.extra_words(h["title"], qt)
+                                   + 0.2 * len(qt & set(terms(h["snippet"])))), order[h["title"]]))
         titles = [h["title"] for h in hits[:3]]
         pages = web.articles(titles, lang=lang)
+        # keep the main article, plus others only if they're about the same thing
+        pages = pages[:1] + [p for p in pages[1:] if self.extra_words(p["title"], qt) <= 1]
         th.step("Reading articles", " · ".join(p["title"] for p in pages) or "none readable")
         if not pages:
             return None
@@ -392,13 +431,13 @@ class Assistant:
         self.set_card(top, th)
         for p in pages:
             th.source(f"Wikipedia: {p['title']}", p["url"])
-        sentences = self.best_sentences(q, pages)
+        sentences = self.best_sentences(q, pages, context=query)
         # If the intro doesn't contain the answer, read the whole top article.
         if not any(s[1] > 0 for s in sentences[1:]) and self.needs_detail(q):
             full = web.articles([top["title"]], lang=lang, intro=False)
             if full:
                 th.step("Reading the full article", top["title"])
-                sentences = self.best_sentences(q, [dict(top, extract=full[0]["extract"])] + pages[1:])
+                sentences = self.best_sentences(q, [dict(top, extract=full[0]["extract"])] + pages[1:], context=query)
         th.step("Picking the sentences that answer it", f"{len(sentences)} sentences from {len(pages)} articles")
         return " ".join(s for s, _ in sentences)
 
@@ -414,14 +453,16 @@ class Assistant:
         parts = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9\"'])", text)
         return [p.strip() for p in parts if 25 <= len(p.strip()) <= 400]
 
-    def best_sentences(self, q, pages, limit=4, max_chars=700):
-        qt = Counter(terms(q))
+    def best_sentences(self, q, pages, limit=4, max_chars=700, context=""):
+        # the question's own words count most; the topic carried over from earlier helps a little
+        weights = {t: 0.5 for t in terms(context)}
+        weights.update({t: 2.0 for t in terms(q)})
         wants_number = bool(re.search(r"\b(when|how many|how much|how old|how long|how tall|how far|year|date)\b", q, re.I))
         scored = []
         for pi, p in enumerate(pages):
             for si, s in enumerate(self.split_sentences(p["extract"])):
                 st = set(terms(s))
-                score = sum(1 for t in qt if t in st)
+                score = sum(w for t, w in weights.items() if t in st)
                 if wants_number and re.search(r"\d", s):
                     score += 1
                 score -= pi * 0.5 + si * 0.02

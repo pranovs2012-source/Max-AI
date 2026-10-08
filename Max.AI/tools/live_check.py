@@ -51,6 +51,14 @@ for convo in CONVERSATIONS:
         failures.append("follow-up lookup")
     if convo[0] == "latest news" and result["route"] != "news":
         failures.append("news")
+    if convo[0] == "most populous countries" and not ("India" in result["reply"] and "China" in result["reply"]):
+        failures.append("world population ranking")
+    if convo[0] == "tallest buildings in the world" and "Burj Khalifa" not in result["reply"]:
+        failures.append("world buildings ranking")
+    if convo[0].startswith("भारत") and ("दिल्ली" not in result["reply"] and "Delhi" not in result["reply"]):
+        failures.append("Hindi question")
+    if convo[-1] == "And its currency?" and "yen" not in result["reply"].lower():
+        failures.append("follow-up from memory")
 
 print("=" * 100)
 if failures:
