@@ -46,3 +46,7 @@ jobs:
       - name: Ask Max real questions (live Wikipedia)
         working-directory: Max.AI
         run: python tools/live_check.py
+      - name: Tables Max reads for speed rankings
+        if: always()
+        working-directory: Max.AI
+        run: python -m maxgpt.web --tables "List of production car speed records" | head -40

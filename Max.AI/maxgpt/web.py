@@ -360,10 +360,20 @@ def define(word):
     return out[:4]
 
 
-if __name__ == "__main__":  # quick manual check:  python -m maxgpt.web "query"
+if __name__ == "__main__":
+    # python -m maxgpt.web "query"            search and summaries
+    # python -m maxgpt.web --tables "Title"   the tables Max can read from an article
     import sys
-    q = " ".join(sys.argv[1:]) or "Python programming language"
-    hits = search(q)
-    print(hits)
-    for a in articles([h["title"] for h in hits[:2]]):
-        print(a["title"], "-", a["extract"][:300])
+    if sys.argv[1:2] == ["--tables"]:
+        title, page = article_html(" ".join(sys.argv[2:]))
+        for i, t in enumerate(tables(page)):
+            print(f"[{title} · table {i}] caption={t['caption']!r} rows={len(t['rows'])}")
+            print("   headers:", t["headers"])
+            for r in t["rows"][:3]:
+                print("   ", r)
+    else:
+        q = " ".join(sys.argv[1:]) or "Python programming language"
+        hits = search(q)
+        print(hits)
+        for a in articles([h["title"] for h in hits[:2]]):
+            print(a["title"], "-", a["extract"][:300])
