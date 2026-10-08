@@ -13,6 +13,7 @@ _WORDS = [(r"\bmultiplied by\b|\btimes\b|\bx\b", "*"), (r"\bdivided by\b|\bover\
           (r"\bmod(ulo)?\b", "%")]
 _OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv,
         ast.Mod: operator.mod, ast.Pow: operator.pow, ast.USub: operator.neg, ast.UAdd: operator.pos}
+_PERCENT = re.compile(r"^(\d+(?:\.\d+)?)\s*(?:%|percent)\s+of\s+(\d+(?:\.\d+)?)$")
 _PREFIX = re.compile(r"^\s*(what\s+is|what's|whats|calculate|compute|solve|how\s+much\s+is)\s+", re.I)
 
 
@@ -29,9 +30,19 @@ def _eval(node):
     raise ValueError("not arithmetic")
 
 
+def _number(value):
+    if isinstance(value, float):
+        return int(value) if value.is_integer() else round(value, 6)
+    return value
+
+
 def answer(question):
     """Return a sentence with the result, or None if this isn't a simple calculation."""
     text = _PREFIX.sub("", question.strip().lower()).rstrip("?=. ")
+    percent = _PERCENT.match(text)
+    if percent:  # "15% of 200"
+        share, total = float(percent.group(1)), float(percent.group(2))
+        return f"{percent.group(1)}% of {percent.group(2)} = {_number(share * total / 100)}"
     for pattern, symbol in _WORDS:
         text = re.sub(pattern, symbol, text)
     if not re.fullmatch(r"[\d\s.+\-*/%()]+", text) or not re.search(r"\d\s*[-+*/%]", text):
@@ -40,7 +51,5 @@ def answer(question):
         value = _eval(ast.parse(text, mode="eval").body)
     except (SyntaxError, ValueError, ZeroDivisionError, OverflowError):
         return None
-    if isinstance(value, float):
-        value = int(value) if value.is_integer() else round(value, 6)
     pretty = " ".join(text.split())
-    return f"{pretty} = {value}"
+    return f"{pretty} = {_number(value)}"

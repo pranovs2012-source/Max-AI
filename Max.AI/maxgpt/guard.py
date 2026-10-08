@@ -22,18 +22,19 @@ from .data import parse_conversations
 
 _WORD = re.compile(r"[a-z0-9_#+.]+")
 # Words that say nothing about the topic.
-_STOP = set("""a an the is are was were be to of in on for and or with my your i you me it this that
+_STOP = set("""a an the is are was were be to of in on for and or with my your i you me it this that they
 what how do does can could would should please pls tell explain about give show make write max hey hi
 quick question need help some any use using way get who where when why which ok okay cool nice great yes no
 yeah yep lol thanks thank bye good morning night sure alright hmm wow example examples more another again
 instead also simpler shorter detail details same other one there here like want know whats two three
-first last""".split())
+first last have has""".split())
 
 # Different spellings of the same topic.
 _SYNONYMS = {"js": "javascript", "py": "python", "dict": "dictionary", "dicts": "dictionary",
              "dictionaries": "dictionary", "lists": "list", "arrays": "array", "funcs": "function",
              "func": "function", "functions": "function", "repo": "repository", "db": "database",
-             "errors": "error", "bug": "error", "bugs": "error", "html5": "html", "css3": "css"}
+             "errors": "error", "bug": "error", "bugs": "error", "html5": "html", "css3": "css",
+             "spoken": "speak", "speaks": "speak"}
 
 
 def _stem(word):
@@ -84,12 +85,15 @@ class KnowledgeGuard:
         norm = math.sqrt(sum(x * x for x in v.values())) or 1.0
         return {t: x / norm for t, x in v.items()}
 
-    def _best(self, text, vecs, entries):
+    def _best(self, text, vecs, entries, needed=None):
+        """Most similar entry; with `needed`, only entries sharing one of those terms count."""
         q = self._vec(Counter(_terms(text)))
         if not any(t in self.idf for t in q):
             return 0.0, None
         best, best_entry = 0.0, None
         for vec, entry in zip(vecs, entries):
+            if needed and not needed.intersection(vec):
+                continue
             s = sum(w * vec.get(t, 0.0) for t, w in q.items())
             if s > best:
                 best, best_entry = s, entry
@@ -102,11 +106,12 @@ class KnowledgeGuard:
         s, entry = self._best(question, self.single_vecs, self.singles)
         return s, entry[0] if entry else None
 
-    def match(self, question, previous=None):
+    def match(self, question, previous=None, context=None):
         """Turns to prompt the model with, or None if Max hasn't learned this topic.
 
         Returns the closest training question, or for a follow-up the matching
-        training conversation up to and including the follow-up.
+        training conversation up to and including the follow-up. `context` is the
+        earlier conversation used to carry a topic over (defaults to `previous`).
         """
         s1, single = self._best(question, self.single_vecs, self.singles) if _terms(question) else (0.0, None)
         s2, pair = 0.0, None
@@ -114,14 +119,40 @@ class KnowledgeGuard:
             s2, pair = self._best(previous + " " + question, self.pair_vecs, self.pairs)
         if pair and s2 >= self.threshold and s2 >= s1 and self._similar_follow_up(question, pair[2]):
             return list(pair[1])
+        context = context or previous
+        carried = None
+        if context and _terms(question):
+            # Carry the topic over: "And its currency?" after "capital of Japan?" -> "What currency does Japan use?"
+            # The extra context words lower the score, so a weaker match is fine when the training
+            # question shares words with both the new question and the earlier ones.
+            s3, best = self._best(context + " " + question, self.single_vecs, self.singles,
+                                  needed=set(_terms(question)))
+            if best and s3 >= self.threshold / 2 and set(_terms(context)) & set(_terms(best[0])):
+                carried = best
+        if single and s1 < self.threshold + 0.15 and not self._keeps_topic(question, single[0]):
+            single = None  # "how many moons…" is not "how many bones…"
         if single and s1 >= self.threshold:
-            return list(single[1])
+            # "What language do they speak there?" alone matches some country; prefer the one from
+            # the conversation when the direct match brings in words the user never mentioned.
+            said = set(_terms(question)) | set(_terms(context or ""))
+            if not carried or len(set(_terms(single[0])) - said) <= len(set(_terms(carried[0])) - said):
+                return list(single[1])
+        if carried:
+            return list(carried[1])
         if not _terms(question):  # small talk ("thanks!", "show me more")
             close = difflib.get_close_matches(_plain(question), list(self.small_talk), n=1, cutoff=0.3)
             if close:
                 return list(self.small_talk[close[0]])
             return [("user", "Hello")] if "hello" in self.small_talk else [("user", question)]
         return None
+
+    def _keeps_topic(self, question, trained):
+        """Does the trained question contain the asker's most specific known word?"""
+        known = [t for t in _terms(question) if t in self.idf]
+        if not known:
+            return True
+        top = max(self.idf[t] for t in known)
+        return any(self.idf[t] == top for t in set(known) & set(_terms(trained)))
 
     @staticmethod
     def _similar_follow_up(question, trained):
