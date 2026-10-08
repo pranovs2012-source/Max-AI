@@ -1,0 +1,320 @@
+===
+User: What is SQL?
+Max: SQL (Structured Query Language) is the language for working with relational databases: creating tables, inserting rows and querying data.
+===
+User: How do I create a table in SQL?
+Max: ```sql
+CREATE TABLE users (
+  id INTEGER PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+===
+User: How do I insert data in SQL?
+Max: ```sql
+INSERT INTO users (email) VALUES ('max@example.com');
+```
+===
+User: How do I select data in SQL?
+Max: ```sql
+SELECT id, email FROM users WHERE email LIKE '%@example.com' ORDER BY id DESC LIMIT 10;
+```
+===
+User: How do I update a row in SQL?
+Max: ```sql
+UPDATE users SET email = 'new@example.com' WHERE id = 1;
+```
+Always include a WHERE clause, or every row gets updated.
+===
+User: How do I delete a row in SQL?
+Max: ```sql
+DELETE FROM users WHERE id = 1;
+```
+Without WHERE, every row is deleted, so double-check first.
+===
+User: What is a JOIN in SQL?
+Max: A JOIN combines rows from two tables using a related column:
+```sql
+SELECT users.email, orders.total
+FROM orders
+JOIN users ON users.id = orders.user_id;
+```
+INNER JOIN keeps matches only; LEFT JOIN keeps every row from the left table.
+===
+User: What is a primary key?
+Max: A primary key is a column that uniquely identifies each row, like `id`. It can't be NULL and can't repeat.
+===
+User: What is a foreign key?
+Max: A foreign key is a column that points to the primary key of another table, like `orders.user_id` pointing to `users.id`. It keeps related data consistent.
+===
+User: What is GROUP BY?
+Max: GROUP BY groups rows so you can aggregate them:
+```sql
+SELECT user_id, COUNT(*) AS orders, SUM(total) AS spent
+FROM orders
+GROUP BY user_id;
+```
+===
+User: What is SQL injection?
+Max: SQL injection is when user input is pasted into a query and changes its meaning. Prevent it with parameterized queries:
+```python
+cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
+```
+Never build SQL with string formatting.
+===
+User: What is an index in a database?
+Max: An index is a lookup structure that makes searches on a column fast, like a book's index. Add one to columns you filter or join on often: `CREATE INDEX idx_email ON users(email);`.
+===
+User: What is the difference between SQL and NoSQL?
+Max: SQL databases store data in tables with a fixed schema and support joins. NoSQL databases, like MongoDB or Redis, use documents, key-value pairs or graphs and are more flexible about structure.
+===
+User: How do I use SQLite in Python?
+Max: ```python
+import sqlite3
+
+conn = sqlite3.connect("app.db")
+cur = conn.cursor()
+cur.execute("CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY, text TEXT)")
+cur.execute("INSERT INTO notes (text) VALUES (?)", ("hello",))
+conn.commit()
+print(cur.execute("SELECT * FROM notes").fetchall())
+conn.close()
+```
+===
+User: What is Git?
+Max: Git is a version control system. It records snapshots of your code called commits, so you can go back in time, work on branches and collaborate safely.
+===
+User: How do I start a Git repository?
+Max: ```bash
+git init
+git add .
+git commit -m "First commit"
+```
+===
+User: How do I push to GitHub?
+Max: ```bash
+git remote add origin https://github.com/you/project.git
+git branch -M main
+git push -u origin main
+```
+After that, just `git push`.
+===
+User: What is a commit?
+Max: A commit is a saved snapshot of your project with a message explaining what changed. Make small commits with clear messages.
+===
+User: What is a branch in Git?
+Max: A branch is a separate line of work. Create one with `git switch -c feature-login`, commit there, then merge it back into main when it's ready.
+===
+User: How do I undo my last commit?
+Max: If you haven't pushed it: `git reset --soft HEAD~1` keeps the changes staged. If it's already pushed, use `git revert HEAD`, which adds a new commit that undoes it safely.
+===
+User: What is a merge conflict?
+Max: A merge conflict happens when two branches change the same lines. Git marks the spot with <<<<<<<, ======= and >>>>>>>. Edit the file to keep the right code, then `git add` and `git commit`.
+===
+User: What is git pull?
+Max: `git pull` downloads new commits from the remote and merges them into your current branch. It's `git fetch` plus `git merge`.
+===
+User: What is .gitignore?
+Max: A file listing things Git should not track, like `venv/`, `node_modules/`, `.env` and build outputs. It keeps secrets and junk out of your repository.
+===
+User: What is a pull request?
+Max: A pull request asks to merge your branch into another branch on GitHub. Teammates can review the changes and comment before merging.
+===
+User: How do I see my Git history?
+Max: `git log --oneline` shows one line per commit. Add `--graph` to see branches.
+===
+User: What is Big O notation?
+Max: Big O describes how an algorithm's time or memory grows with input size n. O(1) is constant, O(log n) logarithmic, O(n) linear, O(n log n) is typical for good sorting, and O(n^2) is quadratic, like nested loops.
+===
+User: What is recursion?
+Max: Recursion is when a function calls itself on a smaller version of the problem. It needs a base case to stop:
+```python
+def countdown(n):
+    if n == 0:        # base case
+        return
+    print(n)
+    countdown(n - 1)  # smaller problem
+```
+===
+User: What is binary search?
+Max: Binary search finds an item in a sorted list by halving the search range each step, so it takes O(log n) time:
+```python
+def binary_search(items, target):
+    lo, hi = 0, len(items) - 1
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        if items[mid] == target:
+            return mid
+        if items[mid] < target:
+            lo = mid + 1
+        else:
+            hi = mid - 1
+    return -1
+```
+===
+User: What is a stack?
+Max: A stack is last-in, first-out, like a pile of plates. In Python, a list works as a stack: `append()` pushes and `pop()` removes the top item.
+===
+User: What is a queue?
+Max: A queue is first-in, first-out, like a line at a shop. In Python use `collections.deque` with `append()` and `popleft()`.
+===
+User: What is a linked list?
+Max: A linked list is a chain of nodes where each node stores a value and a pointer to the next node. Inserting at the front is O(1), but finding the k-th item is O(k).
+===
+User: What is a hash table?
+Max: A hash table stores key-value pairs and uses a hash function to jump straight to a key's slot, so lookups are O(1) on average. Python's dict is a hash table.
+===
+User: What is a binary tree?
+Max: A binary tree is made of nodes that each have up to two children, left and right. In a binary search tree, smaller values go left and larger values go right, which makes searching fast when the tree is balanced.
+===
+User: What is a graph in computer science?
+Max: A graph is a set of nodes connected by edges, like cities and roads or users and friendships. You can store it as an adjacency list: a dict from each node to its neighbours.
+===
+User: What is BFS?
+Max: Breadth-first search explores a graph level by level using a queue. It finds the shortest path in an unweighted graph:
+```python
+from collections import deque
+
+def bfs(graph, start):
+    seen, queue = {start}, deque([start])
+    while queue:
+        node = queue.popleft()
+        for nxt in graph[node]:
+            if nxt not in seen:
+                seen.add(nxt)
+                queue.append(nxt)
+    return seen
+```
+===
+User: What is DFS?
+Max: Depth-first search goes as deep as possible along one path before backtracking. It's often written with recursion or a stack, and it's used for things like detecting cycles and exploring mazes.
+===
+User: What is bubble sort?
+Max: Bubble sort repeatedly swaps neighbouring items that are in the wrong order. It's simple but O(n^2):
+```python
+def bubble_sort(a):
+    for i in range(len(a)):
+        for j in range(len(a) - 1 - i):
+            if a[j] > a[j + 1]:
+                a[j], a[j + 1] = a[j + 1], a[j]
+    return a
+```
+===
+User: What is merge sort?
+Max: Merge sort splits the list in half, sorts each half recursively, then merges them. It's O(n log n) and stable:
+```python
+def merge_sort(a):
+    if len(a) <= 1:
+        return a
+    mid = len(a) // 2
+    left, right = merge_sort(a[:mid]), merge_sort(a[mid:])
+    out, i, j = [], 0, 0
+    while i < len(left) and j < len(right):
+        if left[i] <= right[j]:
+            out.append(left[i]); i += 1
+        else:
+            out.append(right[j]); j += 1
+    return out + left[i:] + right[j:]
+```
+===
+User: What is quicksort?
+Max: Quicksort picks a pivot, puts smaller items before it and larger items after it, then sorts both sides recursively. It's O(n log n) on average and very fast in practice.
+===
+User: What is dynamic programming?
+Max: Dynamic programming solves problems by breaking them into overlapping subproblems and saving each answer so it's computed only once. Caching Fibonacci results is the classic example:
+```python
+from functools import lru_cache
+
+@lru_cache(maxsize=None)
+def fib(n):
+    return n if n < 2 else fib(n - 1) + fib(n - 2)
+```
+===
+User: What is object oriented programming?
+Max: OOP organizes code into objects that combine data and behaviour. Its main ideas are encapsulation, inheritance, polymorphism and abstraction.
+===
+User: What is inheritance?
+Max: Inheritance lets a class reuse another class's code:
+```python
+class Animal:
+    def speak(self):
+        return "..."
+
+class Cat(Animal):
+    def speak(self):
+        return "meow"
+```
+`Cat` gets everything from `Animal` and can override methods.
+===
+User: What is an operating system?
+Max: An operating system manages the computer's hardware and runs programs. It handles processes, memory, files and devices. Windows, macOS, Linux and Android are examples.
+===
+User: What is the difference between a process and a thread?
+Max: A process is a running program with its own memory. Threads live inside a process and share its memory, so they're lighter but need care to avoid race conditions.
+===
+User: What is RAM?
+Max: RAM is the computer's short-term working memory. It's fast but cleared when the power goes off, unlike storage such as an SSD.
+===
+User: What is a CPU?
+Max: The CPU (central processing unit) runs program instructions: arithmetic, logic and moving data. Modern CPUs have several cores that work in parallel.
+===
+User: What is binary?
+Max: Binary is base 2: it uses only 0 and 1. Computers use it because circuits are either off or on. For example, 5 in binary is 101.
+===
+User: What is a compiler?
+Max: A compiler translates source code into machine code before the program runs, like C or Rust. An interpreter runs code line by line instead, like Python.
+===
+User: What is machine learning?
+Max: Machine learning is teaching computers to learn patterns from data instead of writing every rule by hand. You train a model on examples and it makes predictions on new data.
+===
+User: What is a neural network?
+Max: A neural network is layers of simple units that multiply inputs by weights, add them up and apply an activation function. Training adjusts the weights with gradient descent so the outputs get closer to the right answers.
+===
+User: What is a large language model?
+Max: A large language model is a neural network trained on lots of text to predict the next token. By predicting one token after another, it can answer questions and write code. I'm a very small one!
+===
+User: What is a transformer?
+Max: A transformer is the neural network design behind modern language models. Its key part is self-attention, which lets every token look at the earlier tokens to decide what matters. MaxGPT is a small transformer.
+===
+User: What is attention in transformers?
+Max: Attention lets each token build its meaning from other tokens. Each token makes a query, compares it with every other token's key to get weights, then takes a weighted mix of their values.
+===
+User: What is a token?
+Max: A token is a chunk of text the model works with, often a word or part of a word. MaxGPT uses a byte-pair encoding tokenizer it learned from its own training data.
+===
+User: What is gradient descent?
+Max: Gradient descent trains a model by measuring the error, computing how each weight affects it (the gradient), and nudging every weight a little in the direction that lowers the error. Repeat thousands of times.
+===
+User: What is overfitting?
+Max: Overfitting is when a model memorizes its training data instead of learning general patterns, so it does well in training but badly on new data. More data, regularization and early stopping help.
+===
+User: What is the cloud?
+Max: The cloud means using someone else's computers over the internet for storage, servers and databases, from providers like AWS, Google Cloud or Azure, instead of running your own hardware.
+===
+User: What is Docker?
+Max: Docker packages an app and everything it needs into a container, so it runs the same on any machine. You describe the setup in a Dockerfile.
+===
+User: What is encryption?
+Max: Encryption scrambles data with a key so only someone with the right key can read it. HTTPS encrypts web traffic, and AES is a common algorithm for encrypting files.
+===
+User: What is hashing?
+Max: Hashing turns data into a fixed-size fingerprint that can't be reversed. It's used to store passwords safely: store the salted hash, not the password, with tools like bcrypt or werkzeug's generate_password_hash.
+===
+User: What is the difference between HTTP and HTTPS?
+Max: HTTPS is HTTP with encryption (TLS). It stops others on the network from reading or changing the data, so always use it for logins and payments.
+===
+User: What is DNS?
+Max: DNS is the internet's phone book. It turns names like github.com into IP addresses that computers use to connect.
+===
+User: What is an IP address?
+Max: An IP address is a number that identifies a device on a network, like 192.168.1.10 for IPv4. Data on the internet is sent from one IP address to another.
+===
+User: How do I debug my code?
+Max: Read the full error message and line number first. Then print or log the values just before the failing line, shrink the problem to the smallest example that still fails, and change one thing at a time.
+===
+User: How do I get better at coding?
+Max: Build small projects you care about, read other people's code, practice problems regularly and learn to use a debugger. Consistency beats intensity.
+===
+User: Which programming language should I learn first?
+Max: Python is a great first language: the syntax is clean and you can use it for automation, web backends, data and AI. If you want to build websites, learn HTML, CSS and JavaScript too.

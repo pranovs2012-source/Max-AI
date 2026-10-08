@@ -1,0 +1,281 @@
+===
+User: How do I fix a KeyError?
+Max: A KeyError means the dictionary doesn't have that key. Fix it by checking first or using get:
+```python
+age = user.get("age", 0)   # 0 if "age" is missing
+if "age" in user:
+    print(user["age"])
+```
+Also print `user.keys()` to see which keys really exist.
+===
+User: How do I fix an IndexError?
+Max: Make sure the index is inside the list. Valid indexes go from 0 to `len(items) - 1`:
+```python
+if i < len(items):
+    print(items[i])
+```
+Loop with `for item in items:` instead of indexes when you can.
+===
+User: How do I fix a TypeError?
+Max: Read which types the message mentions and convert one of them. For example, `"Total: " + 5` fails; use `"Total: " + str(5)` or `f"Total: {5}"`.
+===
+User: How do I fix ModuleNotFoundError?
+Max: The package isn't installed in the Python you're running. Install it with `pip install package-name`, and make sure your virtual environment is activated.
+===
+User: How do I fix a ZeroDivisionError?
+Max: Check the divisor before dividing:
+```python
+result = a / b if b != 0 else 0
+```
+===
+User: Why is my loop infinite?
+Max: The loop condition never becomes false. In a while loop, make sure something inside the loop changes the variable you're checking, like `i += 1`.
+===
+User: What is a closure in JavaScript?
+Max: A closure is a function that remembers variables from where it was created, even after that outer function finished:
+```javascript
+function counter() {
+  let count = 0;
+  return () => ++count;
+}
+const next = counter();
+next(); // 1
+next(); // 2
+```
+===
+User: What is a closure in Python?
+Max: An inner function that remembers variables from its enclosing function:
+```python
+def multiplier(n):
+    def times(x):
+        return x * n
+    return times
+
+double = multiplier(2)
+print(double(5))  # 10
+```
+===
+User: How do I reverse an array in JavaScript?
+Max: Use reverse, which changes the array, or toReversed for a copy:
+```javascript
+const nums = [1, 2, 3];
+const copy = [...nums].reverse(); // [3, 2, 1]
+```
+===
+User: How do I reverse a list in Python?
+Max: ```python
+nums = [1, 2, 3]
+nums.reverse()            # in place
+backwards = nums[::-1]    # new list
+```
+===
+User: How do I sort an array in JavaScript?
+Max: Pass a compare function, or numbers get sorted as text:
+```javascript
+const nums = [10, 2, 33];
+nums.sort((a, b) => a - b); // [2, 10, 33]
+```
+===
+User: How do I remove an item from an array in JavaScript?
+Max: Use filter to make a new array without it:
+```javascript
+const items = ["a", "b", "c"];
+const withoutB = items.filter(x => x !== "b");
+```
+Or `items.splice(index, 1)` to remove it in place.
+===
+User: How do I check if an array contains a value in JavaScript?
+Max: Use includes:
+```javascript
+["apple", "pear"].includes("pear"); // true
+```
+===
+User: How do I convert a string to a number in JavaScript?
+Max: ```javascript
+Number("42");      // 42
+parseInt("42px");  // 42
+parseFloat("3.5"); // 3.5
+```
+===
+User: How do I convert a string to a number in Python?
+Max: Use int or float:
+```python
+age = int("42")
+price = float("3.99")
+```
+===
+User: What is template literal in JavaScript?
+Max: A string in backticks that can include values with ${}:
+```javascript
+const name = "Max";
+console.log(`Hello, ${name}!`);
+```
+===
+User: What is destructuring in JavaScript?
+Max: Pulling values out of arrays or objects into variables:
+```javascript
+const { name, age } = user;
+const [first, second] = [1, 2];
+```
+===
+User: What is the spread operator?
+Max: `...` expands an array or object:
+```javascript
+const all = [...a, ...b];
+const updated = { ...user, age: 30 };
+```
+===
+User: What is this in JavaScript?
+Max: `this` is the object a function is called on. In `user.greet()`, `this` is `user`. Arrow functions don't have their own `this`; they use the one from the surrounding code.
+===
+User: What is event bubbling?
+Max: When you click an element, the event also fires on its parents, one level at a time up to the document. Call `event.stopPropagation()` to stop it.
+===
+User: How do I use setTimeout?
+Max: It runs a function once after a delay in milliseconds:
+```javascript
+setTimeout(() => console.log("2 seconds later"), 2000);
+```
+Use setInterval to repeat.
+===
+User: How do I use pandas?
+Max: pandas works with tables called DataFrames:
+```python
+import pandas as pd
+
+df = pd.read_csv("data.csv")
+print(df.head())
+print(df["price"].mean())
+```
+Install it with `pip install pandas`.
+===
+User: How do I read a CSV file in Python?
+Max: With the csv module:
+```python
+import csv
+
+with open("data.csv", newline="", encoding="utf-8") as f:
+    for row in csv.DictReader(f):
+        print(row["name"])
+```
+===
+User: What is Kubernetes?
+Max: Kubernetes runs and manages many containers across a group of servers. It restarts crashed containers, scales apps up and down and rolls out updates.
+===
+User: What is Linux?
+Max: Linux is a free, open-source operating system kernel. It powers most servers, Android phones and many developer machines, with distributions like Ubuntu and Fedora.
+===
+User: What are basic Linux commands?
+Max: `ls` lists files, `cd` changes folder, `pwd` shows where you are, `mkdir` makes a folder, `rm` deletes, `cp` copies, `mv` moves, and `cat` prints a file.
+===
+User: What is a terminal?
+Max: A terminal is a text window where you type commands to the computer, like running Python scripts, using Git or installing packages.
+===
+User: What is Java?
+Max: Java is a popular object-oriented language that runs on the Java Virtual Machine. It's used for Android apps, big business systems and backends.
+===
+User: Write hello world in Java
+Max: ```java
+public class Main {
+    public static void main(String[] args) {
+        System.out.println("Hello, world!");
+    }
+}
+```
+===
+User: Write hello world in C
+Max: ```c
+#include <stdio.h>
+
+int main(void) {
+    printf("Hello, world!\n");
+    return 0;
+}
+```
+===
+User: Write hello world in JavaScript
+Max: ```javascript
+console.log("Hello, world!");
+```
+===
+User: What is TypeScript?
+Max: TypeScript is JavaScript with types. You write `let age: number = 5;`, and mistakes like passing text where a number belongs are caught before the code runs.
+===
+User: What is an environment variable?
+Max: A setting stored outside your code, like an API key or database URL. Read it in Python with `os.environ.get("NAME")` and in Node with `process.env.NAME`.
+===
+User: How do I make a to-do list in JavaScript?
+Max: ```html
+<input id="task"><button id="add">Add</button>
+<ul id="list"></ul>
+<script>
+  document.getElementById("add").addEventListener("click", () => {
+    const input = document.getElementById("task");
+    if (!input.value.trim()) return;
+    const li = document.createElement("li");
+    li.textContent = input.value;
+    li.addEventListener("click", () => li.remove());
+    document.getElementById("list").appendChild(li);
+    input.value = "";
+  });
+</script>
+```
+Click a task to remove it.
+===
+User: What is a while loop?
+Max: A while loop repeats as long as its condition is true:
+```python
+count = 3
+while count > 0:
+    print(count)
+    count -= 1
+```
+===
+User: What is a for loop?
+Max: A for loop runs once for each item in a sequence:
+```python
+for i in range(5):
+    print(i)   # 0 to 4
+```
+===
+User: What is a variable?
+Max: A variable is a name that stores a value, like `score = 10`. You can read it, change it and use it in calculations.
+===
+User: What is a function?
+Max: A function is a named, reusable block of code. It takes inputs, does a job and can return a result, so you don't repeat the same code.
+===
+User: What is an array?
+Max: An array is an ordered list of values you reach by index, starting at 0. In JavaScript it's `[1, 2, 3]`; Python calls it a list.
+===
+User: What is a string?
+Max: A string is text, written in quotes like `"hello"`. You can join strings, slice them and change their case.
+===
+User: What is a boolean?
+Max: A boolean is either true or false. Conditions like `age >= 18` produce booleans, and if statements use them to decide what runs.
+===
+User: Explain recursion
+Max: Recursion is when a function solves a problem by calling itself on a smaller piece of it, until it reaches a simple base case.
+User: Show me an example
+Max: ```python
+def sum_to(n):
+    if n == 0:          # base case
+        return 0
+    return n + sum_to(n - 1)
+
+print(sum_to(4))  # 10
+```
+===
+User: What is a list in Python?
+Max: An ordered, changeable collection, like `[1, 2, 3]`.
+User: How do I add an item?
+Max: Use append to add to the end, or insert for a position:
+```python
+nums = [1, 2]
+nums.append(3)
+nums.insert(0, 0)  # [0, 1, 2, 3]
+```
+===
+User: How do I center a div?
+Max: Use flexbox on the parent: `display: flex; justify-content: center; align-items: center;`.
+User: And vertically only?
+Max: Use `align-items: center` on a flex parent that has a height, like `min-height: 100vh`.
