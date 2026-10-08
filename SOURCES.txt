@@ -1,0 +1,2 @@
+databricks-dolly-15k.jsonl: Databricks Dolly 15k, CC BY-SA 3.0
+https://huggingface.co/datasets/databricks/databricks-dolly-15k
