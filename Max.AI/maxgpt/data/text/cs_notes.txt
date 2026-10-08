@@ -1,0 +1,35 @@
+Programming is the art of giving a computer precise instructions. A program is a list of steps written in a programming language, such as Python, JavaScript, Java or C. The computer follows the steps exactly, so a small mistake in the instructions can produce a bug.
+
+A variable is a name that refers to a value. In Python you write name = "Max" and the variable name now refers to the text Max. Values have types. Common types are integers like 42, floating point numbers like 3.14, strings like "hello", booleans that are True or False, lists, dictionaries and None, which means no value.
+
+A function is a reusable block of code with a name. It takes inputs called parameters and can return an output. Functions keep programs organized, because each function does one job and can be tested on its own. Good function names describe what the function does, like calculate_total or send_email.
+
+Conditions let a program make decisions. An if statement runs a block of code only when a condition is true. An else block runs when it is false, and elif checks another condition. Loops repeat code. A for loop goes through each item in a collection, and a while loop repeats as long as a condition stays true. Use break to leave a loop early and continue to skip to the next round.
+
+Data structures organize data so it can be used efficiently. A list or array keeps items in order and lets you reach any item by its index. A dictionary or hash map stores pairs of keys and values and finds a value by its key very quickly. A set stores unique items. A stack is last in, first out. A queue is first in, first out. A tree stores data in a hierarchy, and a graph stores nodes connected by edges.
+
+An algorithm is a step by step method for solving a problem. Searching and sorting are classic examples. Linear search checks every item one by one. Binary search works on sorted data and cuts the search space in half at every step. Sorting algorithms such as merge sort and quicksort put items in order in about n log n steps.
+
+Big O notation describes how the running time of an algorithm grows as the input grows. An algorithm that is O(1) takes the same time no matter how large the input is. O(n) grows in a straight line with the input. O(n squared) grows much faster, which is why nested loops over large data can be slow. Choosing a better algorithm often helps more than any small optimization.
+
+Object oriented programming groups data and behaviour into objects. A class is the blueprint and an object is one instance of it. Encapsulation hides the inner details of an object. Inheritance lets one class reuse and extend another. Polymorphism lets different classes be used through the same interface.
+
+Errors are a normal part of programming. A syntax error means the code is not written correctly and cannot run. A runtime error happens while the program runs, for example when dividing by zero or reading a file that does not exist. A logic error means the program runs but gives the wrong answer. Reading the error message carefully, checking the line number and printing values are the first steps of debugging.
+
+The web works with clients and servers. A browser is a client. It sends an HTTP request to a server, and the server sends back a response, often an HTML page or JSON data. HTML gives a page its structure, CSS gives it style and JavaScript makes it interactive. A backend written in Python with Flask or in JavaScript with Node.js can read databases and send data to the frontend.
+
+A database stores data so it can be saved and searched. Relational databases such as SQLite, MySQL and PostgreSQL store data in tables of rows and columns and are queried with SQL. Each table usually has a primary key that identifies every row. Indexes make searches faster. Parameterized queries protect a database from SQL injection.
+
+Version control keeps the history of a project. Git saves snapshots called commits. Branches let developers work on features separately and merge them later. GitHub hosts Git repositories online so teams can share code, review pull requests and track issues.
+
+Security matters in every program. Never store passwords as plain text; store a salted hash instead. Keep secret keys and API keys out of the source code by using environment variables. Validate all input from users. Use HTTPS so data cannot be read on the network. Keep libraries up to date to get security fixes.
+
+Machine learning lets computers learn patterns from data. A model has parameters, also called weights. During training, the model makes predictions, a loss function measures how wrong they are, and gradient descent adjusts the weights a little to reduce the loss. After many steps the model becomes better at the task.
+
+A language model is trained to predict the next token in a piece of text. Text is first split into tokens by a tokenizer. A transformer reads the tokens, and its attention layers let each token look at the tokens before it. The model outputs a probability for every possible next token, picks one, adds it to the text and repeats. This is how a chatbot writes an answer one token at a time.
+
+Max AI is a coding assistant built by Pranov. It runs on MaxGPT, a small transformer language model written from scratch in Python with NumPy. MaxGPT has its own tokenizer, its own training code and its own weights, so Max AI does not need any external API. It can be trained on new conversations to learn new topics.
+
+Good code is readable. Use clear names, keep functions short, write comments that explain why something is done, and remove code that is no longer used. Write tests that check the important behaviour, so that when you change the code later you know right away if something breaks.
+
+Learning to program takes practice. Start with small projects, such as a calculator, a to do list, a quiz game or a personal website. Read error messages, search the documentation, and do not be afraid to experiment. Every bug you fix makes you a better programmer.
