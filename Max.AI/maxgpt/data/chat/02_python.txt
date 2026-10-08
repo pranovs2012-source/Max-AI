@@ -1,0 +1,450 @@
+===
+User: How do I print hello world in Python?
+Max: Use the print function:
+```python
+print("Hello, world!")
+```
+===
+User: How do I write a function in Python?
+Max: Use the def keyword:
+```python
+def greet(name):
+    return f"Hello, {name}!"
+
+print(greet("Pranov"))
+```
+===
+User: What is a list in Python?
+Max: A list is an ordered, changeable collection. You create it with square brackets:
+```python
+fruits = ["apple", "banana", "cherry"]
+fruits.append("mango")
+print(fruits[0])  # apple
+```
+===
+User: What is a dictionary in Python?
+Max: A dictionary stores key-value pairs:
+```python
+user = {"name": "Max", "age": 1}
+print(user["name"])  # Max
+user["city"] = "Chennai"
+```
+===
+User: How do I loop through a list?
+Max: Use a for loop:
+```python
+for fruit in ["apple", "banana", "cherry"]:
+    print(fruit)
+```
+If you also need the index, use enumerate:
+```python
+for i, fruit in enumerate(fruits):
+    print(i, fruit)
+```
+===
+User: How do I read a file in Python?
+Max: Use open with a with block so the file closes automatically:
+```python
+with open("notes.txt", encoding="utf-8") as f:
+    text = f.read()
+print(text)
+```
+===
+User: How do I write to a file in Python?
+Max: Open the file in write mode:
+```python
+with open("output.txt", "w", encoding="utf-8") as f:
+    f.write("Hello file!\n")
+```
+Use "a" instead of "w" to append instead of overwrite.
+===
+User: How do I reverse a string in Python?
+Max: Use slicing with a step of -1:
+```python
+text = "hello"
+print(text[::-1])  # olleh
+```
+===
+User: How do I check if a number is even?
+Max: Use the modulo operator:
+```python
+def is_even(n):
+    return n % 2 == 0
+```
+===
+User: Write a function to check if a number is prime
+Max: Here's a simple version:
+```python
+def is_prime(n):
+    if n < 2:
+        return False
+    i = 2
+    while i * i <= n:
+        if n % i == 0:
+            return False
+        i += 1
+    return True
+```
+It only checks divisors up to the square root of n, which keeps it fast.
+===
+User: Write fizzbuzz in Python
+Max: ```python
+for i in range(1, 101):
+    if i % 15 == 0:
+        print("FizzBuzz")
+    elif i % 3 == 0:
+        print("Fizz")
+    elif i % 5 == 0:
+        print("Buzz")
+    else:
+        print(i)
+```
+===
+User: How do I find the factorial of a number?
+Max: Recursively:
+```python
+def factorial(n):
+    return 1 if n <= 1 else n * factorial(n - 1)
+```
+Or use the standard library: `math.factorial(5)` returns 120.
+===
+User: Write a Fibonacci function
+Max: An iterative version is fast and simple:
+```python
+def fibonacci(n):
+    a, b = 0, 1
+    for _ in range(n):
+        a, b = b, a + b
+    return a
+
+print([fibonacci(i) for i in range(10)])
+```
+===
+User: What is a list comprehension?
+Max: A short way to build a list from a loop:
+```python
+squares = [x * x for x in range(10)]
+evens = [x for x in range(20) if x % 2 == 0]
+```
+===
+User: How do I handle errors in Python?
+Max: Use try and except:
+```python
+try:
+    number = int(input("Enter a number: "))
+except ValueError:
+    print("That's not a number!")
+```
+Catch specific exceptions, not every exception, so real bugs still show up.
+===
+User: What is a class in Python?
+Max: A class is a blueprint for objects. It bundles data and the functions that work on it:
+```python
+class Dog:
+    def __init__(self, name):
+        self.name = name
+
+    def bark(self):
+        return f"{self.name} says woof!"
+
+print(Dog("Rex").bark())
+```
+===
+User: What does self mean in Python?
+Max: `self` is the object a method is called on. In `dog.bark()`, Python passes `dog` as `self`, so the method can read `self.name`.
+===
+User: What is __init__?
+Max: `__init__` is the constructor. It runs when you create an object and sets up its starting attributes.
+===
+User: How do I install a package in Python?
+Max: Use pip in your terminal:
+```bash
+pip install requests
+```
+It's good practice to do this inside a virtual environment.
+===
+User: How do I create a virtual environment?
+Max: ```bash
+python -m venv venv
+source venv/bin/activate      # macOS / Linux
+venv\Scripts\activate         # Windows
+```
+Then pip install packages into it.
+===
+User: How do I sort a list?
+Max: `sorted()` returns a new list, `.sort()` sorts in place:
+```python
+nums = [3, 1, 2]
+print(sorted(nums))          # [1, 2, 3]
+nums.sort(reverse=True)      # [3, 2, 1]
+```
+To sort by a key: `sorted(users, key=lambda u: u["age"])`.
+===
+User: What is a lambda function?
+Max: A small anonymous function written in one line:
+```python
+square = lambda x: x * x
+print(square(4))  # 16
+```
+They're handy as the `key` for sorted or max.
+===
+User: How do I get user input in Python?
+Max: Use input(). It always returns a string, so convert it if you need a number:
+```python
+name = input("Your name: ")
+age = int(input("Your age: "))
+```
+===
+User: What is the difference between a list and a tuple?
+Max: Lists are mutable, so you can change them. Tuples are immutable. Use a tuple for fixed groups like coordinates `(x, y)` and a list for collections that grow or change.
+===
+User: What is a set in Python?
+Max: A set is an unordered collection with no duplicates:
+```python
+tags = {"python", "code", "python"}
+print(tags)  # {'python', 'code'}
+```
+Checking `"code" in tags` is very fast.
+===
+User: How do I remove duplicates from a list?
+Max: Convert to a dict to keep the original order:
+```python
+items = [3, 1, 3, 2, 1]
+unique = list(dict.fromkeys(items))  # [3, 1, 2]
+```
+===
+User: How do I count words in a string?
+Max: ```python
+from collections import Counter
+
+text = "the cat and the hat"
+counts = Counter(text.split())
+print(counts.most_common(2))  # [('the', 2), ('cat', 1)]
+```
+===
+User: What is a generator?
+Max: A function that yields values one at a time instead of building a whole list:
+```python
+def countdown(n):
+    while n > 0:
+        yield n
+        n -= 1
+
+for x in countdown(3):
+    print(x)
+```
+It saves memory for big or endless sequences.
+===
+User: What is a decorator?
+Max: A function that wraps another function to add behaviour:
+```python
+def shout(func):
+    def wrapper(*args):
+        return func(*args).upper()
+    return wrapper
+
+@shout
+def greet(name):
+    return f"hi {name}"
+
+print(greet("max"))  # HI MAX
+```
+===
+User: How do I make an HTTP request in Python?
+Max: Use the requests library:
+```python
+import requests
+
+r = requests.get("https://api.github.com")
+print(r.status_code)
+print(r.json())
+```
+===
+User: How do I work with JSON in Python?
+Max: Use the json module:
+```python
+import json
+
+data = json.loads('{"name": "Max"}')
+text = json.dumps(data, indent=2)
+```
+===
+User: How do I get the current date in Python?
+Max: ```python
+from datetime import datetime
+
+now = datetime.now()
+print(now.strftime("%Y-%m-%d %H:%M"))
+```
+===
+User: How do I generate a random number?
+Max: ```python
+import random
+
+print(random.randint(1, 100))      # whole number from 1 to 100
+print(random.choice(["a", "b"]))   # random item
+```
+===
+User: Write a number guessing game
+Max: ```python
+import random
+
+secret = random.randint(1, 100)
+while True:
+    guess = int(input("Guess 1-100: "))
+    if guess < secret:
+        print("Higher!")
+    elif guess > secret:
+        print("Lower!")
+    else:
+        print("You got it!")
+        break
+```
+===
+User: What does if __name__ == "__main__" mean?
+Max: It runs the code below it only when the file is run directly, not when it's imported as a module. It keeps test or startup code from running on import.
+===
+User: What is the difference between == and is?
+Max: `==` checks if two values are equal. `is` checks if they are the same object in memory. Use `is` only for `None`, like `if x is None:`.
+===
+User: Why do I get IndentationError?
+Max: Python uses indentation to group code. Use 4 spaces for each level, never mix tabs and spaces, and indent every line inside an if, for, def or class block the same amount.
+===
+User: What is a NameError?
+Max: A NameError means you used a variable or function name Python doesn't know. Check for typos, and make sure it's defined before the line that uses it.
+===
+User: What is a TypeError?
+Max: A TypeError means an operation got the wrong type, like `"age: " + 5`. Convert first: `"age: " + str(5)`, or use an f-string: `f"age: {5}"`.
+===
+User: What is a KeyError?
+Max: A KeyError means you asked a dictionary for a key it doesn't have. Use `d.get("key")` to get `None` instead, or check with `if "key" in d:` first.
+===
+User: What is an IndexError?
+Max: An IndexError means you used a list index that doesn't exist, like `items[5]` on a list with 3 items. Remember indexes start at 0, so the last one is `len(items) - 1`.
+===
+User: How do I merge two dictionaries?
+Max: ```python
+a = {"x": 1}
+b = {"y": 2}
+merged = a | b          # Python 3.9+
+merged = {**a, **b}     # works everywhere
+```
+===
+User: How do I swap two variables?
+Max: Python can do it in one line:
+```python
+a, b = b, a
+```
+===
+User: How do I find the largest number in a list?
+Max: Use max:
+```python
+print(max([4, 9, 2]))  # 9
+```
+===
+User: How do I sum a list?
+Max: Use sum:
+```python
+print(sum([1, 2, 3]))  # 6
+```
+===
+User: How do I check if a string is a palindrome?
+Max: ```python
+def is_palindrome(s):
+    s = "".join(c.lower() for c in s if c.isalnum())
+    return s == s[::-1]
+
+print(is_palindrome("Race car"))  # True
+```
+===
+User: What are *args and **kwargs?
+Max: `*args` collects extra positional arguments into a tuple, and `**kwargs` collects extra keyword arguments into a dict:
+```python
+def show(*args, **kwargs):
+    print(args, kwargs)
+
+show(1, 2, color="red")  # (1, 2) {'color': 'red'}
+```
+===
+User: What is f-string?
+Max: An f-string puts values straight into text:
+```python
+name, score = "Max", 98
+print(f"{name} scored {score}%")
+```
+===
+User: Write a simple calculator in Python
+Max: ```python
+a = float(input("First number: "))
+op = input("Operator (+ - * /): ")
+b = float(input("Second number: "))
+
+if op == "+":
+    print(a + b)
+elif op == "-":
+    print(a - b)
+elif op == "*":
+    print(a * b)
+elif op == "/":
+    print(a / b if b != 0 else "Can't divide by zero")
+else:
+    print("Unknown operator")
+```
+===
+User: How do I make a simple Flask app?
+Max: ```python
+from flask import Flask
+
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "Hello from Flask!"
+
+if __name__ == "__main__":
+    app.run(debug=True)
+```
+Run it with `python app.py` and open http://127.0.0.1:5000.
+===
+User: How do I return JSON from Flask?
+Max: Use jsonify:
+```python
+from flask import jsonify
+
+@app.route("/api/status")
+def status():
+    return jsonify({"ok": True})
+```
+===
+User: How do I read POST data in Flask?
+Max: For JSON bodies use request.json, for forms use request.form:
+```python
+from flask import request
+
+@app.route("/chat", methods=["POST"])
+def chat():
+    message = request.json.get("message", "")
+    return {"reply": f"You said: {message}"}
+```
+===
+User: How do I keep secrets out of my code?
+Max: Put them in environment variables and read them with os.environ:
+```python
+import os
+API_KEY = os.environ.get("API_KEY")
+```
+Store them in a .env file that is listed in .gitignore, and never commit keys to GitHub.
+===
+User: My Python code is slow
+Max: First measure where the time goes with `python -m cProfile script.py`. Common fixes: use sets or dicts for lookups instead of lists, avoid repeated work inside loops, and use built-ins like sum and sorted.
+===
+User: How do I write a test in Python?
+Max: With pytest, write functions that start with test_:
+```python
+def add(a, b):
+    return a + b
+
+def test_add():
+    assert add(2, 3) == 5
+```
+Run `pytest` in the terminal.

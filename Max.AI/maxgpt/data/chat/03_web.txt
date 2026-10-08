@@ -1,0 +1,257 @@
+===
+User: What is HTML?
+Max: HTML (HyperText Markup Language) describes the structure of a web page: headings, paragraphs, links, images and forms. CSS styles it and JavaScript makes it interactive.
+===
+User: Write a basic HTML page
+Max: ```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My Page</title>
+</head>
+<body>
+  <h1>Hello!</h1>
+  <p>My first web page.</p>
+</body>
+</html>
+```
+===
+User: What is CSS?
+Max: CSS (Cascading Style Sheets) controls how HTML looks: colors, fonts, spacing and layout.
+```css
+body { font-family: sans-serif; background: #f5f5f5; }
+h1 { color: #4b6bfb; }
+```
+===
+User: How do I center a div?
+Max: Flexbox is the easiest way:
+```css
+.parent {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+}
+```
+Or with grid: `display: grid; place-items: center;`.
+===
+User: What is flexbox?
+Max: Flexbox is a CSS layout that lines items up in a row or column. Set `display: flex` on the parent, then use `justify-content` for the main axis, `align-items` for the cross axis and `gap` for spacing.
+===
+User: What is CSS grid?
+Max: CSS grid lays items out in rows and columns:
+```css
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+}
+```
+That makes a responsive card grid with no media queries.
+===
+User: How do I make my website responsive?
+Max: Add the viewport meta tag, use flexible units like %, rem and fr, and add media queries for small screens:
+```css
+@media (max-width: 600px) {
+  .sidebar { display: none; }
+}
+```
+===
+User: What are CSS variables?
+Max: Custom properties you define once and reuse:
+```css
+:root { --brand: #4b6bfb; }
+button { background: var(--brand); }
+```
+Change `--brand` and every button updates.
+===
+User: How do I make a button in HTML?
+Max: ```html
+<button type="button" id="hello">Click me</button>
+<script>
+  document.getElementById("hello").addEventListener("click", () => {
+    alert("Hello!");
+  });
+</script>
+```
+===
+User: What is JavaScript?
+Max: JavaScript is the programming language of the web. It runs in the browser to make pages interactive, and with Node.js it also runs on servers.
+===
+User: What is the difference between let, const and var?
+Max: `const` can't be reassigned, `let` can, and both are block-scoped. `var` is function-scoped and older. Use `const` by default and `let` when the value must change.
+===
+User: How do I write a function in JavaScript?
+Max: ```javascript
+function add(a, b) {
+  return a + b;
+}
+
+const multiply = (a, b) => a * b;
+```
+===
+User: What is an arrow function?
+Max: A shorter function syntax: `const square = x => x * x;`. Arrow functions don't have their own `this`, which makes them handy for callbacks.
+===
+User: How do I loop through an array in JavaScript?
+Max: ```javascript
+const fruits = ["apple", "banana"];
+for (const fruit of fruits) {
+  console.log(fruit);
+}
+fruits.forEach((fruit, i) => console.log(i, fruit));
+```
+===
+User: What does map do in JavaScript?
+Max: `map` makes a new array by transforming each item:
+```javascript
+const doubled = [1, 2, 3].map(n => n * 2); // [2, 4, 6]
+```
+===
+User: What does filter do in JavaScript?
+Max: `filter` keeps only the items that pass a test:
+```javascript
+const evens = [1, 2, 3, 4].filter(n => n % 2 === 0); // [2, 4]
+```
+===
+User: What does reduce do?
+Max: `reduce` combines an array into one value:
+```javascript
+const total = [1, 2, 3].reduce((sum, n) => sum + n, 0); // 6
+```
+===
+User: What is the difference between == and === in JavaScript?
+Max: `===` compares value and type with no conversion. `==` converts types first, so `"5" == 5` is true. Always use `===`.
+===
+User: How do I select an element in JavaScript?
+Max: ```javascript
+const title = document.querySelector("h1");
+const buttons = document.querySelectorAll(".btn");
+title.textContent = "New title";
+```
+===
+User: How do I fetch data from an API in JavaScript?
+Max: Use fetch with async/await:
+```javascript
+async function loadUser() {
+  const res = await fetch("https://api.github.com/users/octocat");
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const user = await res.json();
+  console.log(user.name);
+}
+```
+===
+User: What is async await?
+Max: `async`/`await` lets you write asynchronous code that reads like normal code. `await` pauses the async function until a promise finishes, without blocking the page.
+===
+User: What is a promise?
+Max: A promise is a value that will be ready later: it's pending, then fulfilled or rejected. You handle it with `.then()` and `.catch()`, or with `await` inside an async function.
+===
+User: How do I save data in the browser?
+Max: Use localStorage for small data:
+```javascript
+localStorage.setItem("theme", "dark");
+const theme = localStorage.getItem("theme");
+```
+It stores strings, so use JSON.stringify and JSON.parse for objects.
+===
+User: How do I add a click event?
+Max: ```javascript
+document.querySelector("#save").addEventListener("click", () => {
+  console.log("saved!");
+});
+```
+===
+User: What is the DOM?
+Max: The DOM (Document Object Model) is the browser's tree of objects for your HTML page. JavaScript reads and changes the DOM to update what you see.
+===
+User: Why is my JavaScript saying undefined is not a function?
+Max: You're calling something that isn't a function, often because of a typo in the name, calling a method on the wrong object, or the script running before the element or library loaded. Log the value with console.log to check.
+===
+User: Why does my script say cannot read properties of null?
+Max: `document.querySelector` returned null because the element wasn't found. Check the selector, and load your script at the end of the body or with the `defer` attribute so the HTML exists first.
+===
+User: What is JSON?
+Max: JSON (JavaScript Object Notation) is a text format for data, like `{"name": "Max", "skills": ["code"]}`. APIs use it everywhere because almost every language can read it.
+===
+User: What is Node.js?
+Max: Node.js runs JavaScript outside the browser, mostly on servers. You can build APIs, tools and scripts with it and install packages with npm.
+===
+User: How do I make a simple server in Node.js?
+Max: ```javascript
+const http = require("http");
+
+http.createServer((req, res) => {
+  res.writeHead(200, { "Content-Type": "text/plain" });
+  res.end("Hello from Node!");
+}).listen(3000);
+```
+Run `node server.js` and open http://localhost:3000.
+===
+User: What is npm?
+Max: npm is Node's package manager. `npm init -y` creates a package.json and `npm install express` adds a package to your project.
+===
+User: What is React?
+Max: React is a JavaScript library for building user interfaces from components. Each component returns what it should look like, and React updates the page when data changes.
+===
+User: What is an API?
+Max: An API (Application Programming Interface) is a defined way for programs to talk to each other. A web API usually takes HTTP requests and returns JSON.
+===
+User: What is a REST API?
+Max: A REST API uses URLs for resources and HTTP methods for actions: GET to read, POST to create, PUT or PATCH to update and DELETE to remove, like `GET /users/42`.
+===
+User: What are HTTP status codes?
+Max: They tell you how a request went. 200 means OK, 201 created, 301 moved, 400 bad request, 401 not logged in, 403 forbidden, 404 not found and 500 server error.
+===
+User: What is CORS?
+Max: CORS is a browser rule that blocks a page from reading responses from another domain unless that server allows it with headers like `Access-Control-Allow-Origin`. You fix it on the server, not in the browser.
+===
+User: What is the difference between GET and POST?
+Max: GET asks for data and puts parameters in the URL. POST sends data in the request body, for things like forms and creating records. Never send passwords with GET.
+===
+User: What are cookies?
+Max: Cookies are small pieces of data the server asks the browser to store and send back with each request. They're often used to keep you logged in.
+===
+User: How do I make a dark mode toggle?
+Max: ```javascript
+const btn = document.querySelector("#theme");
+btn.addEventListener("click", () => {
+  document.body.classList.toggle("dark");
+});
+```
+```css
+body.dark { background: #111; color: #eee; }
+```
+===
+User: How do I add a CSS animation?
+Max: ```css
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.card { animation: fade-in 0.4s ease-out; }
+```
+===
+User: How do I link CSS to HTML?
+Max: Put this in the head of your HTML:
+```html
+<link rel="stylesheet" href="style.css">
+```
+===
+User: How do I link JavaScript to HTML?
+Max: Put this in the head with defer, or at the end of the body:
+```html
+<script src="script.js" defer></script>
+```
+===
+User: How do I make a form in HTML?
+Max: ```html
+<form>
+  <label for="email">Email</label>
+  <input id="email" type="email" required>
+  <button type="submit">Sign up</button>
+</form>
+```
+Always give each input a label for accessibility.
