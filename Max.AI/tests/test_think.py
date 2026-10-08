@@ -43,7 +43,8 @@ def fake_html(title, lang="en"):
 
 FAKE_WEB = dict(search=fake_search, articles=fake_articles, article_html=fake_html,
                 news=lambda days=2, limit=8: [("2026-10-08", "Leaders met in Geneva to agree on new climate targets.")],
-                define=lambda word: [("Noun", "A happy accident.")])
+                define=lambda word: [("Noun", "A happy accident.")],
+                web_search=lambda query, limit=5: [])
 
 
 class TableTest(unittest.TestCase):
@@ -84,22 +85,24 @@ class AssistantTest(unittest.TestCase):
         r = self.ask("top 3 fastest cars")
         self.assertEqual(r["route"], "rank")
         lines = [l for l in r["reply"].splitlines() if l[:2] in ("1.", "2.", "3.")]
-        self.assertTrue(lines[0].startswith("1. Bugatti Chiron Super Sport 300+ — 490.48"), lines)
-        self.assertTrue(lines[1].startswith("2. SSC Tuatara"), lines)
+        self.assertTrue(lines[0].startswith("1. **Bugatti Chiron Super Sport 300+** — 490.48"), lines)
+        self.assertTrue(lines[1].startswith("2. **SSC Tuatara**"), lines)
+        self.assertIn("ranked by top speed", r["reply"])
+        self.assertNotIn("Wikipedia", r["reply"])
         self.assertEqual(len(lines), 3)
         self.assertIn("Production car speed record", r["sources"][0]["title"])
 
     def test_lookup_with_follow_up(self):
         r = self.ask("Who is Elon Musk?")
         self.assertEqual(r["route"], "look up")
-        self.assertTrue(r["reply"].startswith("Elon Reeve Musk is a businessman"))
+        self.assertTrue(r["reply"].startswith("**Elon Reeve Musk** is a businessman"), r["reply"])
         self.assertEqual(r["card"]["title"], "Elon Musk")
         r = self.ask("Who is Elon Musk?", "when did he found SpaceX?")
         self.assertTrue(r["reply"].startswith("Musk founded SpaceX in 2002"), r["reply"])
 
     def test_news_define_and_unknown(self):
         self.assertIn("Geneva", self.ask("what's the latest news?")["reply"])
-        self.assertIn("happy accident", self.ask("define serendipity")["reply"])
+        self.assertEqual(self.ask("define serendipity")["reply"], "**Serendipity** (noun) means a happy accident.")
         r = self.ask("who won the 2030 world cup")
         self.assertEqual(r["route"], "unknown")
         self.assertTrue(r["thinking"])
@@ -109,6 +112,13 @@ class AssistantTest(unittest.TestCase):
             raise web.WebError("offline")
         with mock.patch.object(web, "search", down):
             self.assertEqual(self.ask("Who is Elon Musk?")["route"], "unknown")
+
+    def test_written_answers_must_match_the_sources(self):
+        ctx = "The tower is 330 metres tall and was completed in 1889."
+        self.assertIsNone(Assistant.unsupported("The tower is 330 metres tall.", ctx))
+        self.assertIsNotNone(Assistant.unsupported("The tower is 350 metres tall.", ctx))        # wrong number
+        self.assertIsNotNone(Assistant.unsupported("The tower is painted bright purple daily.", ctx))  # made up
+        self.assertIsNotNone(Assistant.unsupported("I couldn't find the answer to that.", ctx))
 
     def test_self_check(self):
         self.assertIsNotNone(Assistant.quality_problem("Pranov. Pranov. Pranov. Pranov."))

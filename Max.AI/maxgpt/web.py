@@ -290,6 +290,49 @@ def number(text):
     return value
 
 
+# ── Web results beyond Wikipedia ─────────────────────────────────────────────
+def web_search(query, limit=5):
+    """General web results [{title, url, snippet}].
+
+    With BRAVE_API_KEY set this uses the Brave Search API (real web results, free tier available);
+    otherwise DuckDuckGo's Instant Answer API (no key, short answers and abstracts).
+    """
+    import os
+    key = os.environ.get("BRAVE_API_KEY")
+    if key:
+        url = "https://api.search.brave.com/res/v1/web/search?" + urllib.parse.urlencode({"q": query, "count": limit})
+        req = urllib.request.Request(url, headers={"Accept": "application/json", "X-Subscription-Token": key,
+                                                   "User-Agent": USER_AGENT})
+        try:
+            with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+                data = json.loads(r.read().decode("utf-8"))
+        except Exception as e:
+            raise WebError(str(e)) from e
+        out = []
+        for item in (data.get("web") or {}).get("results", [])[:limit]:
+            snippet = " ".join([strip_tags(item.get("description"))] +
+                               [strip_tags(x) for x in item.get("extra_snippets", [])[:2]])
+            out.append({"title": strip_tags(item.get("title")), "url": item.get("url"), "snippet": snippet.strip()})
+        return out
+    data = _get("https://api.duckduckgo.com/", dict(q=query, format="json", no_html=1, skip_disambig=1,
+                                                     no_redirect=1, t="maxai"))
+    out = []
+    if data.get("Answer"):
+        out.append({"title": "DuckDuckGo", "url": "https://duckduckgo.com/?q=" + urllib.parse.quote(query),
+                    "snippet": strip_tags(str(data["Answer"]))})
+    if data.get("AbstractText"):
+        out.append({"title": data.get("Heading") or query, "url": data.get("AbstractURL"),
+                    "snippet": strip_tags(data["AbstractText"])})
+    if data.get("Definition"):
+        out.append({"title": data.get("DefinitionSource") or "Definition", "url": data.get("DefinitionURL"),
+                    "snippet": strip_tags(data["Definition"])})
+    for topic in data.get("RelatedTopics", [])[:limit]:
+        if topic.get("Text") and topic.get("FirstURL"):
+            out.append({"title": topic["Text"].split(" - ")[0][:80], "url": topic["FirstURL"],
+                        "snippet": strip_tags(topic["Text"])})
+    return out[:limit]
+
+
 # ── News ─────────────────────────────────────────────────────────────────────
 class _ListParser(HTMLParser):
     """Leaf <li> items of a page (news headlines on the Current events portal)."""

@@ -234,6 +234,20 @@
       transition: background .2s, transform .2s var(--spring);
     }
     .meta button:hover, .chip:hover { background: rgba(204, 68, 255, .2); transform: translateY(-1px); }
+    .md { white-space: normal; }
+    .md p { margin: 0 0 8px; }
+    .md p:last-child, .md ul:last-child, .md ol:last-child { margin-bottom: 0; }
+    .md ul, .md ol { margin: 4px 0 8px 22px; }
+    .md li { margin: 3px 0; }
+    .md h4 { margin: 6px 0 4px; font-size: 15px; color: #fff; }
+    .md strong { color: #fff; font-weight: 700; }
+    .md code { background: rgba(0, 0, 0, .35); padding: 1px 5px; border-radius: 5px; font-size: 13px; }
+    .md a { color: #8fd3ff; }
+    .sources-list { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; padding: 6px 10px;
+      border-radius: 10px; background: rgba(255, 255, 255, .04); border: 1px solid var(--line); }
+    .sources-list[hidden] { display: none; }
+    .sources-list a { color: #9fd8ff; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sources-list a:hover { text-decoration: underline; }
     .chip::before { content: "W "; font-weight: 800; font-family: Georgia, serif; color: #fff; }
     .chip.wikt::before { content: "📖 "; }
     .speak.on { background: rgba(64, 255, 200, .18); border-color: rgba(64, 255, 200, .5); color: #c9fff0; }
@@ -532,9 +546,7 @@
           block.append(header, pre);
           wrapper.appendChild(block);
         } else if (part.trim()) {
-          const p = document.createElement("div");
-          p.textContent = part.trim();
-          wrapper.appendChild(p);
+          wrapper.appendChild(renderMarkdown(part.trim()));
         }
       });
 
@@ -594,15 +606,23 @@
         det.append(sum, ol);
         col.insertBefore(det, col.querySelector(".message-content-wrapper"));
       }
-      (data.sources || []).forEach(src => {
-        if (!/^https?:/.test(src.url || "")) return;
-        const a = document.createElement("a");
-        a.className = "chip" + (src.url.includes("wiktionary") ? " wikt" : "");
-        a.href = src.url; a.target = "_blank"; a.rel = "noopener";
-        a.textContent = src.title.replace(/^Wik(ipedia|tionary): /, "");
-        a.title = src.title;
-        meta.appendChild(a);
-      });
+      const sources = (data.sources || []).filter(src => /^https?:/.test(src.url || ""));
+      if (sources.length) {           // sources stay out of the way until asked for
+        const btn = document.createElement("button");
+        btn.textContent = `🔗 Sources (${sources.length})`;
+        const listEl = document.createElement("div");
+        listEl.className = "sources-list";
+        listEl.hidden = true;
+        sources.forEach(src => {
+          const a = document.createElement("a");
+          a.href = src.url; a.target = "_blank"; a.rel = "noopener";
+          a.textContent = src.title;
+          listEl.appendChild(a);
+        });
+        btn.addEventListener("click", () => { listEl.hidden = !listEl.hidden; });
+        meta.appendChild(btn);
+        col.appendChild(listEl);
+      }
     }
 
     // ── Voice ───────────────────────────────────────────────────────────────
@@ -691,6 +711,53 @@
       if (av) animateLevel(av, () => 0.35 + 0.3 * Math.abs(Math.sin((performance.now() - t0) / 120)));
       u.onend = u.onerror = () => { if (speakingMsg === msg) stopSpeaking(); };
       speechSynthesis.speak(u);
+    }
+
+    // Light, safe Markdown for answers: paragraphs, **bold**, *italic*, `code`, lists, headings, links.
+    // Everything is built as DOM nodes with textContent — never as raw HTML.
+    function renderInline(text, into) {
+      const re = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\(https?:\/\/[^)\s]+\)|\*[^*\s][^*]*\*)/g;
+      let last = 0, m;
+      while ((m = re.exec(text))) {
+        if (m.index > last) into.appendChild(document.createTextNode(text.slice(last, m.index)));
+        const tok = m[0];
+        let el;
+        if (tok.startsWith("**")) { el = document.createElement("strong"); el.textContent = tok.slice(2, -2); }
+        else if (tok.startsWith("`")) { el = document.createElement("code"); el.textContent = tok.slice(1, -1); }
+        else if (tok.startsWith("[")) {
+          const mm = tok.match(/^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)$/);
+          el = document.createElement("a"); el.textContent = mm[1]; el.href = mm[2]; el.target = "_blank"; el.rel = "noopener";
+        } else { el = document.createElement("em"); el.textContent = tok.slice(1, -1); }
+        into.appendChild(el);
+        last = m.index + tok.length;
+      }
+      if (last < text.length) into.appendChild(document.createTextNode(text.slice(last)));
+      return into;
+    }
+
+    function renderMarkdown(text) {
+      const box = document.createElement("div");
+      box.className = "md";
+      let list = null;
+      for (const raw of text.split("\n")) {
+        const line = raw.trimEnd();
+        const ol = line.match(/^\s*(\d+)[.)]\s+(.*)$/), ul = line.match(/^\s*[-*•]\s+(.*)$/), h = line.match(/^#{1,3}\s+(.*)$/);
+        if (ol || ul) {
+          const kind = ol ? "OL" : "UL";
+          if (!list || list.tagName !== kind) {
+            list = document.createElement(kind.toLowerCase());
+            if (ol && ol[1] !== "1") list.start = parseInt(ol[1], 10);
+            box.appendChild(list);
+          }
+          list.appendChild(renderInline(ol ? ol[2] : ul[1], document.createElement("li")));
+          continue;
+        }
+        list = null;
+        if (!line.trim()) continue;
+        if (h) { box.appendChild(renderInline(h[1], document.createElement("h4"))); continue; }
+        box.appendChild(renderInline(line, document.createElement("p")));
+      }
+      return box;
     }
 
     function copyCode(btn, code) {

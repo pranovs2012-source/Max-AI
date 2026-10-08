@@ -19,6 +19,7 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 
 from . import calc, web
+from .data import grounded_question
 
 STOP = set("""a an the is are was were be been being to of in on for and or with by at from as it its this that these
 those what which who whom whose when where why how do does did can could would should will shall may might
@@ -252,8 +253,12 @@ class Assistant:
             return None
         th.step("Reading the headlines", f"{len(items)} stories")
         th.source("Wikipedia: Current events", "https://en.wikipedia.org/wiki/Portal:Current_events")
-        lines = [f"{i}. {text}" for i, (_, text) in enumerate(items, 1)]
-        return "Here's what's happening in the world right now:\n\n" + "\n".join(lines)
+        lines = []
+        for text in (t for _, t in items):
+            text = re.sub(r"(\s*\([^()]*\))+\s*$", "", text).strip()     # trailing "(BBC) (Reuters)"
+            first = self.split_sentences(text)[:1]
+            lines.append("- " + (first[0] if first else text))
+        return "Here are today's top stories from around the world:\n\n" + "\n".join(lines)
 
     def define(self, q, th):
         word = DEFINE.match(q.strip()).group(1).strip()
@@ -262,8 +267,13 @@ class Assistant:
         if not defs:
             return None
         th.source(f"Wiktionary: {word}", "https://en.wiktionary.org/wiki/" + word.replace(" ", "_"))
-        lines = [f"{i}. ({pos.lower()}) {d}" if pos else f"{i}. {d}" for i, (pos, d) in enumerate(defs, 1)]
-        return f"{word.capitalize()}:\n" + "\n".join(lines)
+        first_pos, first_def = defs[0]
+        text = f"**{word.capitalize()}**" + (f" ({first_pos.lower()})" if first_pos else "") + \
+            f" means {first_def[0].lower() + first_def[1:].rstrip('.')}."
+        if len(defs) > 1:
+            text += "\n\nOther meanings:\n" + "\n".join(
+                f"- *{pos.lower()}*: {d}" if pos else f"- {d}" for pos, d in defs[1:])
+        return text
 
     def rank(self, q, th):
         want = int(re.search(r"\btop\s*(\d+)", q, re.I).group(1)) if re.search(r"\btop\s*(\d+)", q, re.I) else 10
@@ -317,9 +327,11 @@ class Assistant:
                 f"{best['page']}: {len(best['table']['rows'])} rows" +
                 (f", sorted by “{best['table']['headers'][best['value_col']]}”" if best["value_col"] is not None else ""))
         th.source(f"Wikipedia: {best['page']}", web.page_url(best["page"]))
-        heading = f"Here are the top {len(rows)} {core.strip()} according to Wikipedia ({best['page']}):"
+        measure = best["table"]["headers"][best["value_col"]] if best["value_col"] is not None else ""
+        measure = re.sub(r"\s*[/(].*$", "", measure).strip().lower()
+        heading = f"Here are the top {len(rows)} {core.strip()}" + (f", ranked by {measure}" if measure else "") + ":"
         return heading + "\n\n" + "\n".join(f"{i}. {r}" for i, r in enumerate(rows, 1)) + \
-            "\n\nWant more details about any of them?"
+            "\n\nWould you like to know more about any of them?"
 
     @staticmethod
     def measure_terms(q):
@@ -408,7 +420,7 @@ class Assistant:
                 continue
             seen.add(name.lower())
             value = f" — {r[vc][:70]}" if vc is not None else ""
-            out.append(name[:90] + value)
+            out.append(f"**{name[:90]}**{value}")
             if len(out) >= want:
                 break
         return out
@@ -432,46 +444,121 @@ class Assistant:
         if follow:
             # "how tall is it?" after "What is the Eiffel Tower?": find the Eiffel Tower first
             topic = " ".join(terms(previous))
-            hits = web.search(topic, limit=5, lang=lang)
             th.step("Working out what “it” refers to", f"Earlier topic: “{topic}”")
             query = topic
         else:
             query = self.subject(q, previous)
-            hits = web.search(query, limit=5, lang=lang)
-            if not hits and query != q:
-                hits = web.search(q, limit=5, lang=lang)
-        th.step("Searching Wikipedia", f"{lang}.wikipedia.org · “{query}” → {len(hits)} results")
-        if not hits:
+        # Wikipedia and general web results, side by side
+        with ThreadPoolExecutor(2) as pool:
+            wiki_job = pool.submit(web.search, query, 5, lang)
+            web_job = pool.submit(self._safe_web, (topic + " " + q) if follow else q) if lang == "en" else None
+            hits = wiki_job.result()
+            web_hits = web_job.result() if web_job else []
+        if not hits and not follow and query != q:
+            hits = web.search(q, limit=5, lang=lang)
+        th.step("Searching the web", f"“{query}” → {len(hits)} encyclopedia results, {len(web_hits)} web results")
+        if not hits and not web_hits:
             return None
         qt = set(terms(query))
         order = {h["title"]: i for i, h in enumerate(hits)}
         hits.sort(key=lambda h: (-(2 * len(qt & set(terms(h["title"]))) - 0.8 * self.extra_words(h["title"], qt)
                                    + 0.2 * len(qt & set(terms(h["snippet"])))), order[h["title"]]))
         titles = [h["title"] for h in hits[:1 if follow else 3]]
-        pages = web.articles(titles, lang=lang)
+        pages = web.articles(titles, lang=lang) if titles else []
         # keep the main article, plus others only if they're about the same thing
         pages = pages[:1] + [p for p in pages[1:] if self.extra_words(p["title"], qt) <= 1]
-        th.step("Reading articles", " · ".join(p["title"] for p in pages) or "none readable")
-        if not pages:
+        web_pages = [{"title": h["title"], "extract": h["snippet"], "url": h["url"], "description": "", "image": None}
+                     for h in web_hits if h.get("snippet") and h.get("url")]
+        th.step("Reading the results", " · ".join(p["title"] for p in pages + web_pages[:3]) or "nothing readable")
+        if not pages and not web_pages:
             return None
-        top = pages[0]
-        if len(qt & set(terms(top["title"] + " " + top["extract"][:400]))) == 0:
-            th.step("Checking relevance", "The articles don't match the question")
+        top = pages[0] if pages else web_pages[0]
+        if len(qt & set(terms(top["title"] + " " + top["extract"][:400]))) == 0 and not web_pages:
+            th.step("Checking relevance", "The results don't match the question")
             return None
-        self.set_card(top, th)
-        for p in pages:
-            th.source(f"Wikipedia: {p['title']}", p["url"])
+        if pages and not follow:
+            self.set_card(top, th)
+        for p in pages + web_pages:
+            th.source(p["title"] if p in web_pages else f"Wikipedia: {p['title']}", p["url"])
         context = query if not follow else query + " " + " ".join(terms(q))
-        sentences = self.best_sentences(q, pages, context=context)
-        # If the intro doesn't answer it, read the whole main article.
+        sources = pages + web_pages
+        sentences = self.best_sentences(q, sources, context=context)
+        # If the summaries don't answer it, read the whole main article.
         answered = any(set(terms(s)) & set(terms(q)) for s, _ in sentences)
-        if (follow or self.needs_detail(q)) and not (answered and sentences and sentences[0][1] >= 2):
+        if pages and (follow or self.needs_detail(q)) and not (answered and sentences and sentences[0][1] >= 2):
             full = web.articles([top["title"]], lang=lang, intro=False)
             if full:
                 th.step("Reading the full article", top["title"])
-                sentences = self.best_sentences(q, [dict(top, extract=full[0]["extract"])] + pages[1:], context=context)
-        th.step("Picking the sentences that answer it", f"{len(sentences)} sentences from {len(pages)} articles")
-        return " ".join(s for s, _ in sentences)
+                sentences = self.best_sentences(q, [dict(top, extract=full[0]["extract"])] + sources[1:], context=context)
+        if not sentences:
+            return None
+        th.step("Picking the facts that answer it", f"{len(sentences)} sentences from {len(sources)} sources")
+        return self.write_answer(q, sentences, top["title"], th)
+
+    @staticmethod
+    def _safe_web(query):
+        try:
+            return web.web_search(query)
+        except web.WebError:
+            return []
+
+    # ── writing the answer ───────────────────────────────────────────────────
+    def write_answer(self, q, sentences, title, th):
+        """Max writes the answer from the facts it found; a check keeps it faithful to them."""
+        facts = [s for s, _ in sentences]
+        if self.engine is not None and getattr(self.engine, "grounded", False):
+            passages, size = [], 0
+            for f in facts:
+                if size + len(f) > 900:
+                    break
+                passages.append(f)
+                size += len(f)
+            prompt = grounded_question(q, passages)
+            for temp in (0.0, 0.3):
+                answer = self.engine.reply([("user", prompt)], guard=False, temperature=temp, max_new_tokens=120)
+                problem = self.unsupported(answer, " ".join(passages))
+                if not problem:
+                    th.step("Writing the answer in my own words", "Every fact checked against the sources ✓")
+                    return answer
+                th.step("Double-checking my wording", problem)
+        th.step("Writing the answer", "Built from the sources' own sentences")
+        return self.compose(facts, title)
+
+    @staticmethod
+    def unsupported(answer, context):
+        """Why a written answer can't be trusted (None if it's fine)."""
+        problem = Assistant.quality_problem(answer)
+        if problem:
+            return problem
+        if len(answer.strip()) < 15:
+            return "Answer was too short"
+        if re.search(r"couldn't find|don't say|rather not guess", answer, re.I):
+            return "Said it couldn't find an answer the sources contain"
+        ctx_terms = set(terms(context))
+        words = [t for t in terms(answer) if not t.isdigit()]
+        if words and sum(t in ctx_terms for t in words) / len(words) < 0.8:
+            return "Used words the sources don't contain"
+        ctx_numbers = set(re.findall(r"\d+(?:[.,]\d+)?", context))
+        if any(n not in ctx_numbers for n in re.findall(r"\d+(?:[.,]\d+)?", answer)):
+            return "Gave a number the sources don't contain"
+        return None
+
+    @staticmethod
+    def compose(facts, title):
+        """A readable paragraph from the chosen sentences, with the subject in bold."""
+        text = " ".join(facts)
+        text = re.sub(r"\s+([,.;:!?])", r"\1", text)
+        text = re.sub(r"\s{2,}", " ", text).strip()
+        name = re.sub(r"\s*\(.*\)$", "", title or "").strip()
+        lead = re.match(r"^(.{3,70}?)\s+(is|was|are|were|has|had)\b", text)
+        if lead and set(terms(lead.group(1))) & set(terms(name)):
+            text = f"**{lead.group(1)}**" + text[lead.end(1):]      # "**Elon Reeve Musk** is ..."
+        elif name and len(name) > 2:
+            text = re.sub(re.escape(name), lambda m: f"**{m.group(0)}**", text, count=1, flags=re.I)
+        sents = Assistant.split_sentences(text) if len(facts) > 2 else []
+        if len(sents) > 2:      # a short first paragraph, then the details
+            text = sents[0] + "\n\n" + " ".join(sents[1:])
+        return text
 
     @staticmethod
     def needs_detail(q):
