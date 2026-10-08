@@ -28,7 +28,7 @@ Machine learning lets computers learn patterns from data. A model has parameters
 
 A language model is trained to predict the next token in a piece of text. Text is first split into tokens by a tokenizer. A transformer reads the tokens, and its attention layers let each token look at the tokens before it. The model outputs a probability for every possible next token, picks one, adds it to the text and repeats. This is how a chatbot writes an answer one token at a time.
 
-Max AI is a coding assistant built by Pranov. It runs on MaxGPT, a small transformer language model written from scratch in Python with NumPy. MaxGPT has its own tokenizer, its own training code and its own weights, so Max AI does not need any external API. It can be trained on new conversations to learn new topics.
+Max AI is an AI assistant created by Pranov. It runs on MaxGPT, a transformer language model that Pranov built and trained, with its own tokenizer, training code and weights. Pranov keeps improving it by training it on new conversations and topics.
 
 Good code is readable. Use clear names, keep functions short, write comments that explain why something is done, and remove code that is no longer used. Write tests that check the important behaviour, so that when you change the code later you know right away if something breaks.
 

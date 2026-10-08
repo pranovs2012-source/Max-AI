@@ -1,14 +1,16 @@
 # Max-AI 🤖
 
-An AI coding assistant built with Flask, powered by **MaxGPT — Max's own language model**.
-No OpenAI, Groq or any other external API: the model is written from scratch, trained on
-Max's own data, and runs on your own machine.
+Max is an AI assistant created by **Pranov**, powered by **MaxGPT**, a transformer language
+model built and trained for Max. It helps with programming, computer science, science,
+geography, history and everyday questions.
 
 ---
 
 ## 🚀 Features
 - **MaxGPT**: a GPT-style transformer written from scratch in Python + NumPy
   (own tokenizer, own autograd engine, own training loop, own weights)
+- General knowledge: countries and capitals, planets, chemical elements, inventions, science,
+  history, health, money, study tips, writing help and more
 - **Knowledge guard**: Max says honestly when a topic is outside what it has learned,
   instead of making things up, and logs the question so you can teach it
 - Exact answers for arithmetic ("what is 7 * 8") from a safe built-in calculator
@@ -16,7 +18,7 @@ Max's own data, and runs on your own machine.
 - Code blocks with one-click copy, voice input, chat history restore / clear
 - Email + password login and optional Google sign-in
 - Optional **local GGUF backend**: run any open-weight model (Llama, Qwen, Mistral…) on your
-  own computer through llama.cpp — still no API
+  own computer through llama.cpp
 
 ---
 
@@ -35,6 +37,7 @@ python -m venv venv
 source venv/bin/activate            # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
+python -m maxgpt.knowledge          # build the world-facts training file
 python -m maxgpt.train              # only if maxgpt/checkpoints/ is missing (~40-60 min on a laptop CPU)
 python MAX_AI.py                    # open http://127.0.0.1:5000
 ```
@@ -69,6 +72,7 @@ In the Vercel project settings → **Environment Variables**, add:
 | `maxgpt/model.py` | Decoder-only transformer: token + position embeddings, causal self-attention, MLP, layer norm, weight tying, KV-cache generation |
 | `maxgpt/optim.py` | AdamW optimizer, gradient clipping, warmup + cosine learning rate |
 | `maxgpt/data.py` | Loads chat transcripts and text, learns only Max's replies, rewords questions for robustness |
+| `maxgpt/knowledge.py` | Fact tables (countries, elements, planets, inventions…) turned into training conversations |
 | `maxgpt/guard.py` | Knowledge guard: checks whether a question is close to something Max learned |
 | `maxgpt/calc.py` | Safe calculator for arithmetic questions |
 | `maxgpt/train.py` | Training script with presets, validation and checkpoints |
@@ -80,8 +84,8 @@ Run the tests with `python -m unittest discover -s tests` (from the `Max.AI` fol
 
 ### Model sizes
 ```bash
-python -m maxgpt.train --preset small              # ~1.1M parameters (default)
-python -m maxgpt.train --preset base --steps 8000  # ~3.5M parameters, better answers
+python -m maxgpt.train --preset small              # ~1.1M parameters, quick
+python -m maxgpt.train --preset base --steps 8000  # ~3.5M parameters (used by the GitHub workflow)
 python -m maxgpt.train --resume --steps 2000       # keep training the current model
 ```
 
@@ -92,19 +96,19 @@ Add conversations to any `.txt` file in `Max.AI/maxgpt/data/chat/`:
 User: What is a closure?
 Max: A closure is a function that remembers variables from the scope where it was created...
 ```
-Plain articles or notes can go in `Max.AI/maxgpt/data/text/`. Then retrain (or push to GitHub
-and let the workflow retrain). Questions Max couldn't answer are saved in
-`Max.AI/maxgpt/data/unanswered.txt` — a ready-made to-do list of what to teach next.
-More (and more varied) data is the single best way to make MaxGPT smarter.
+Plain articles or notes can go in `Max.AI/maxgpt/data/text/`, and new facts can be added to the
+tables in `maxgpt/knowledge.py`. Then retrain (or push to GitHub and let the workflow retrain).
+Questions Max couldn't answer are saved in `Max.AI/maxgpt/data/unanswered.txt` — a ready-made
+to-do list of what to teach next. More (and more varied) data is the single best way to make
+MaxGPT smarter.
 
-> **Honest expectations:** MaxGPT is tiny compared with models like Llama 3 70B. It answers the
+> **Honest expectations:** MaxGPT is small compared with models like Llama 3 70B. It answers the
 > kinds of questions in its training data well and admits when it doesn't know something, but
-> it can't reason about brand-new topics. For much stronger answers *without* an API, use the
-> GGUF backend below.
+> it can't reason about brand-new topics. For much stronger answers, use the GGUF backend below.
 
 ---
 
-## 🔌 Optional: a bigger local model (still no API)
+## 🔌 Optional: a bigger local model
 ```bash
 pip install llama-cpp-python
 # download a GGUF model, e.g. a small "Qwen2.5-Coder-1.5B-Instruct" or "Llama-3.2-3B-Instruct" Q4 file
