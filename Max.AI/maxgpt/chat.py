@@ -17,9 +17,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_DIR = os.path.join(HERE, "checkpoints")
 DATA_DIR = os.path.join(HERE, "data")
 
-UNKNOWN_REPLY = ("I haven't learned about that yet, so I'd rather not guess. I'm a small model that knows "
-                 "Python, JavaScript, HTML, CSS, SQL, Git and computer science basics. Try asking about one of "
-                 "those, or rephrase your question with more detail.")
+UNKNOWN_REPLY = ("I'm not sure about that one yet, and I'd rather not give you a wrong answer. I know the most "
+                 "about programming, computer science, science, geography, history and everyday topics. "
+                 "Could you rephrase it or ask me something else?")
 
 
 class MaxGPTEngine:

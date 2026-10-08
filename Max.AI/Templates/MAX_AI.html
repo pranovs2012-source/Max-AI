@@ -243,7 +243,7 @@
 <body>
   <div class="header">
     <h1 class="logo">MAX AI</h1>
-    <p class="subtitle">Your coding assistant</p>
+    <p class="subtitle">Your AI assistant</p>
     <p class="credits">Developed by Pranov</p>
     <span class="model-badge" id="modelBadge">Loading model…</span>
     <div class="header-actions">
@@ -257,7 +257,7 @@
     <div class="messages" id="chat-messages"></div>
 
     <div class="input-area">
-      <textarea id="messageInput" rows="1" placeholder="Ask Max about code…"></textarea>
+      <textarea id="messageInput" rows="1" placeholder="Ask Max anything…"></textarea>
       <button id="micBtn" title="Speak your message">🎤</button>
       <button id="sendBtn" title="Send">➤</button>
     </div>
@@ -275,7 +275,7 @@
       .then(r => r.json())
       .then(info => {
         if (info.ready) {
-          badge.textContent = "Model: " + info.model + " · no external API";
+          badge.textContent = "Model: " + info.model;
         } else {
           badge.textContent = "Model offline — " + info.error;
           badge.classList.add("offline");
@@ -440,7 +440,7 @@
       messagesEl.innerHTML = "";
     });
 
-    addMessage("Hi! I'm Max, your coding assistant. Ask me anything about code.");
+    addMessage("Hi! I'm Max, your AI assistant. Ask me anything.");
   </script>
 </body>
 </html>
