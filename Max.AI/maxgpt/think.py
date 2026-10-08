@@ -62,6 +62,7 @@ SUPER_WORDS = set("top best most least largest biggest fastest tallest highest l
                   "ranking famous greatest".split())
 NEUTRAL = set("list world global all time ever history record records the by of in and top current".split())
 TIME_HEADER = re.compile(r"0\s*[–-]|\(s\)|seconds|\btime\b|lap", re.I)
+STARTS_NUMERIC = re.compile(r"^\s*[~≈<>+\-−]?\s*(?:US)?[$€£¥₹]?\s*\d")
 NAME_HEADERS = ("name", "model", "car", "vehicle", "country", "city", "company", "person", "title", "building",
                 "film", "song", "album", "artist", "player", "team", "mountain", "river", "language", "game", "make")
 
@@ -366,12 +367,13 @@ class Assistant:
                 break
         name_col = None
         for c, h in enumerate(headers):
-            if any(k in h for k in NAME_HEADERS) and sum(web.number(r[c]) is None for r in rows) >= len(rows) * 0.6:
+            # a name may contain digits ("Jaguar XK120"); it just doesn't start with one
+            if any(k in h for k in NAME_HEADERS) and sum(not STARTS_NUMERIC.match(r[c]) for r in rows) >= len(rows) * 0.6:
                 name_col = c
                 break
         if name_col is None:
             for c in range(len(headers)):
-                if c != value_col and sum(web.number(r[c]) is None and len(r[c]) > 1 for r in rows) >= len(rows) * 0.7:
+                if c != value_col and sum(not STARTS_NUMERIC.match(r[c]) and len(r[c]) > 1 for r in rows) >= len(rows) * 0.7:
                     name_col = c
                     break
         if name_col is None:
