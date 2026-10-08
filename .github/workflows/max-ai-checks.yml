@@ -1,0 +1,48 @@
+name: Max AI checks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Max.AI/**.py"
+      - "Max.AI/tools/**"
+      - ".github/workflows/max-ai-checks.yml"
+  workflow_dispatch:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy flask "psycopg[binary]"
+      - name: Unit tests (SQLite and PostgreSQL)
+        working-directory: Max.AI
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: python -m unittest discover -s tests -v
+
+  live-knowledge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy
+      - name: World facts file for the knowledge guard
+        working-directory: Max.AI
+        run: python -m maxgpt.knowledge
+      - name: Ask Max real questions (live Wikipedia)
+        working-directory: Max.AI
+        run: python tools/live_check.py

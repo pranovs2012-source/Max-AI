@@ -1,12 +1,15 @@
-"""Language-model backends for Max AI. No external API is used.
+"""Language-model backends for Max AI.
 
 Choose one with the MAX_AI_BACKEND environment variable:
 
-  maxgpt (default)  Max's own model, trained from scratch with `python -m maxgpt.train`.
-                    Needs only NumPy and runs on any CPU.
+  maxgpt (default)  Max's own model, trained from scratch with `python -m maxgpt.train`, plus Max's
+                    reasoning loop (maxgpt/think.py) that looks facts up on Wikipedia.
+                    Set MAX_AI_WEB=0 to answer only from the trained model.
   gguf              Any open-weight model in GGUF format (Llama, Qwen, Mistral, ...) running
-                    locally through llama.cpp. Much smarter, still no API.
+                    locally through llama.cpp.
                     pip install llama-cpp-python, then set MAX_AI_GGUF_PATH=/path/to/model.gguf
+
+Every backend has answer(history) -> {"reply", "thinking", "sources", "card", ...}.
 """
 import os
 
@@ -23,10 +26,11 @@ class MaxGPTBackend:
         from maxgpt.chat import DEFAULT_DIR, MaxGPTEngine
         self.engine = MaxGPTEngine(os.environ.get("MAXGPT_CHECKPOINT", DEFAULT_DIR),
                                    temperature=float(os.environ.get("MAXGPT_TEMPERATURE", "0.6")))
+        from maxgpt.think import Assistant
+        self.assistant = Assistant(self.engine, use_web=os.environ.get("MAX_AI_WEB", "1") != "0")
 
-    def reply(self, history):
-        # MaxGPT was trained with its own short system prompt, so we keep that one.
-        return self.engine.reply(history) or "Hmm, I'm not sure. Could you rephrase that?"
+    def answer(self, history):
+        return self.assistant.answer(history)
 
 
 class GGUFBackend:
@@ -44,6 +48,9 @@ class GGUFBackend:
         messages += [{"role": role, "content": text} for role, text in history]
         out = self.llm.create_chat_completion(messages=messages, max_tokens=1024, temperature=0.6)
         return out["choices"][0]["message"]["content"].strip()
+
+    def answer(self, history):
+        return {"reply": self.reply(history), "thinking": [], "sources": [], "card": None, "route": "model"}
 
 
 BACKENDS = {"maxgpt": MaxGPTBackend, "gguf": GGUFBackend}

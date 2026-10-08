@@ -1,62 +1,47 @@
-"""Max AI — Flask chat app powered by MaxGPT, Max's own language model (no external API)."""
+"""Max AI — Flask chat app powered by MaxGPT, with live knowledge, a voice and a Postgres database."""
 import os
 import secrets
-import shutil
-import sqlite3
+import time
 
-from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, Response, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
+import database
+import voice
 from llm_backends import get_backend
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE_DIR = os.path.join(HERE, "Templates" if os.path.isdir(os.path.join(HERE, "Templates")) else "templates")
-DATABASE = os.environ.get("MAX_AI_DB") or os.path.join(HERE, "maxlog.db")
-if os.environ.get("VERCEL") and not os.environ.get("MAX_AI_DB"):
-    # Vercel's file system is read-only except /tmp, and /tmp is wiped when the function
-    # goes cold. Work on a copy there; for permanent accounts use a hosted database.
-    tmp_db = "/tmp/maxlog.db"
-    if not os.path.exists(tmp_db) and os.path.exists(DATABASE):
-        shutil.copy(DATABASE, tmp_db)
-    DATABASE = tmp_db
 HISTORY_TURNS = 10  # how many recent messages are sent to the model as context
 
 app = Flask(__name__, template_folder=TEMPLATE_DIR)
 # Set FLASK_SECRET_KEY in production so logins survive restarts.
 app.secret_key = os.environ.get("FLASK_SECRET_KEY") or secrets.token_hex(32)
 
-
-def db():
-    return sqlite3.connect(DATABASE)
+_db_error, _db_checked = None, 0.0
 
 
-def init_db():
-    with db() as conn:
-        conn.execute("""CREATE TABLE IF NOT EXISTS usersdb (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL)""")
-        conn.execute("""CREATE TABLE IF NOT EXISTS chat_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT NOT NULL,
-            role TEXT NOT NULL,
-            content TEXT NOT NULL,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)""")
+def _init_database():
+    global _db_error, _db_checked
+    _db_checked = time.time()
+    try:
+        database.init()
+        _db_error = None
+    except Exception as e:  # wrong DATABASE_URL, database waking up, network...
+        _db_error = f"Database is not reachable: {e}"
 
 
-def save_message(email, role, content):
-    with db() as conn:
-        conn.execute("INSERT INTO chat_history (email, role, content) VALUES (?, ?, ?)", (email, role, content))
+_init_database()
 
 
-def load_messages(email, limit=None):
-    with db() as conn:
-        rows = conn.execute("SELECT role, content FROM chat_history WHERE email = ? ORDER BY id", (email,)).fetchall()
-    rows = [{"role": r, "content": c} for r, c in rows]
-    return rows[-limit:] if limit else rows
-
-
-init_db()
+@app.before_request
+def require_database():
+    if _db_error and time.time() - _db_checked > 10:
+        _init_database()          # retry: hosted databases can be waking up from sleep
+    if _db_error and request.endpoint not in ("model_info", "static"):
+        if request.endpoint in ("login", "register"):
+            return render_template(f"{request.endpoint}.html", error=_db_error), 503
+        return jsonify({"error": _db_error}), 503
 
 
 @app.route("/")
@@ -71,9 +56,8 @@ def login():
         password = request.form.get("password")
         if not email or not password:
             return render_template("login.html", error="Email and password required")
-        with db() as conn:
-            row = conn.execute("SELECT password FROM usersdb WHERE email = ?", (email,)).fetchone()
-        if row and check_password_hash(row[0], password):
+        stored = database.get_password_hash(email)
+        if stored and check_password_hash(stored, password):
             session["email"] = email
             return redirect(url_for("dashboard"))
         return render_template("login.html", error="Invalid email or password")
@@ -90,13 +74,9 @@ def register():
             return render_template("register.html", error="All fields required")
         if password != confirm_password:
             return render_template("register.html", error="Passwords do not match")
-        try:
-            with db() as conn:
-                conn.execute("INSERT INTO usersdb (email, password) VALUES (?, ?)",
-                             (email, generate_password_hash(password)))
+        if database.create_user(email, generate_password_hash(password)):
             return render_template("register.html", success="Account created! Please login.")
-        except sqlite3.IntegrityError:
-            return render_template("register.html", error="Email already exists")
+        return render_template("register.html", error="Email already exists")
     return render_template("register.html")
 
 
@@ -114,11 +94,9 @@ def google_auth():
     except ImportError:
         return jsonify({"error": "Google login needs: pip install google-auth"}), 500
     email = idinfo.get("email")
-    with db() as conn:
-        if not conn.execute("SELECT id FROM usersdb WHERE email = ?", (email,)).fetchone():
-            # random password: Google users can't log in with a guessable one
-            conn.execute("INSERT INTO usersdb (email, password) VALUES (?, ?)",
-                         (email, generate_password_hash(secrets.token_urlsafe(32))))
+    if not database.user_exists(email):
+        # random password: Google users can't log in with a guessable one
+        database.create_user(email, generate_password_hash(secrets.token_urlsafe(32)))
     session["email"] = email
     return jsonify({"success": True, "redirect": url_for("dashboard")})
 
@@ -149,37 +127,55 @@ def chat():
         return jsonify({"reply": f"⚠️ {error}"}), 503
 
     email = session["email"]
-    history = [(m["role"], m["content"]) for m in load_messages(email, HISTORY_TURNS)]
+    history = [(m["role"], m["content"]) for m in database.load_messages(email, HISTORY_TURNS)]
     history.append(("user", user_input))
     try:
-        reply = backend.reply(history)
+        result = backend.answer(history)
     except Exception as e:
         return jsonify({"reply": f"⚠️ The model failed to answer: {e}"}), 500
-    save_message(email, "user", user_input)
-    save_message(email, "assistant", reply)
-    return jsonify({"reply": reply, "model": backend.name})
+    database.save_message(email, "user", user_input)
+    database.save_message(email, "assistant", result["reply"])
+    return jsonify(dict(result, model=backend.name))
+
+
+@app.route("/tts", methods=["POST"])
+def tts():
+    """Max's voice (ElevenLabs). 404 tells the page to use the browser's own speech instead."""
+    if "email" not in session:
+        return jsonify({"error": "Not logged in"}), 401
+    if not voice.enabled():
+        return jsonify({"error": "ElevenLabs voice is not configured"}), 404
+    text = ((request.json or {}).get("text") or "").strip()
+    if not text:
+        return jsonify({"error": "No text"}), 400
+    try:
+        audio = voice.synthesize(text)
+    except voice.VoiceError as e:
+        return jsonify({"error": str(e)}), 502
+    return Response(audio, mimetype="audio/mpeg", headers={"Cache-Control": "private, max-age=3600"})
 
 
 @app.route("/restore_history")
 def restore_history():
     if "email" not in session:
         return jsonify({"error": "not logged in"}), 401
-    return jsonify({"history": load_messages(session["email"])})
+    return jsonify({"history": database.load_messages(session["email"])})
 
 
 @app.route("/clear_history", methods=["POST"])
 def clear_history():
     if "email" not in session:
         return jsonify({"error": "not logged in"}), 401
-    with db() as conn:
-        conn.execute("DELETE FROM chat_history WHERE email = ?", (session["email"],))
+    database.clear_messages(session["email"])
     return jsonify({"ok": True})
 
 
 @app.route("/model_info")
 def model_info():
     backend, error = get_backend()
-    return jsonify({"ready": backend is not None, "model": backend.name if backend else None, "error": error})
+    return jsonify({"ready": backend is not None, "model": backend.name if backend else None, "error": error,
+                    "voice": "elevenlabs" if voice.enabled() else "browser", "database": database.KIND,
+                    "database_error": _db_error})
 
 
 if __name__ == "__main__":

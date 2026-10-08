@@ -170,9 +170,14 @@
     .avatar::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: #1a0b33; }
     @keyframes spin { to { --spin: 360deg; } }
 
+    .bubble-col {
+      display: flex; flex-direction: column; gap: 6px;
+      max-width: min(78%, 680px); min-width: 0;
+    }
+    .message.user .bubble-col { align-items: flex-end; }
     .message-content-wrapper {
       position: relative;
-      max-width: min(78%, 680px);
+      max-width: 100%;
       padding: 11px 15px;
       white-space: pre-wrap;
       word-wrap: break-word;
@@ -208,6 +213,48 @@
       animation: blink .9s steps(1) infinite;
     }
     @keyframes blink { 50% { opacity: 0; } }
+
+    /* answer extras: knowledge card, thinking steps, sources, voice */
+    .kcard {
+      display: flex; gap: 12px; align-items: flex-start;
+      padding: 10px 12px; border-radius: 14px;
+      background: linear-gradient(150deg, rgba(0, 140, 255, .14), rgba(120, 40, 255, .12));
+      border: 1px solid rgba(110, 190, 255, .28);
+      animation: msgIn .6s var(--spring) both;
+    }
+    .kcard img { width: 72px; height: 72px; object-fit: cover; border-radius: 10px; flex: 0 0 auto; box-shadow: 0 4px 14px rgba(0, 0, 0, .4); }
+    .kcard .k-title { font-weight: 700; color: #fff; }
+    .kcard .k-desc { font-size: 12px; color: #9fd8ff; margin-bottom: 3px; }
+    .kcard .k-sum { font-size: 13px; color: #d9d2f5; line-height: 1.4; }
+    .kcard a { font-size: 12px; color: #7fd1ff; }
+    .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; }
+    .meta button, .chip {
+      border: 1px solid var(--line); background: rgba(255, 255, 255, .05); color: #cfc3f5;
+      border-radius: 999px; padding: 3px 10px; font-size: 12px; cursor: pointer; text-decoration: none;
+      transition: background .2s, transform .2s var(--spring);
+    }
+    .meta button:hover, .chip:hover { background: rgba(204, 68, 255, .2); transform: translateY(-1px); }
+    .chip::before { content: "W "; font-weight: 800; font-family: Georgia, serif; color: #fff; }
+    .chip.wikt::before { content: "📖 "; }
+    .speak.on { background: rgba(64, 255, 200, .18); border-color: rgba(64, 255, 200, .5); color: #c9fff0; }
+    details.thoughts {
+      font-size: 12.5px; color: #c8bdf0;
+      background: rgba(255, 255, 255, .035); border: 1px dashed rgba(180, 120, 255, .3);
+      border-radius: 12px; padding: 6px 10px;
+    }
+    details.thoughts summary { cursor: pointer; list-style: none; user-select: none; }
+    details.thoughts summary::-webkit-details-marker { display: none; }
+    details.thoughts summary::after { content: " ▸"; opacity: .7; }
+    details.thoughts[open] summary::after { content: " ▾"; }
+    details.thoughts ol { margin: 6px 0 2px 18px; }
+    details.thoughts li { margin: 3px 0; animation: fadeIn .4s both; }
+    details.thoughts li b { color: #eee6ff; font-weight: 600; }
+    details.thoughts li span { color: #9d8fd0; }
+    details.thoughts li em { color: #6f63a3; font-style: normal; font-size: 11px; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
+    .avatar.speaking { box-shadow: 0 0 calc(16px + var(--level, 0) * 40px) rgba(64, 255, 200, .8); transform: scale(calc(1 + var(--level, 0) * .25)); }
+    .think-label { font-size: 12.5px; color: #b9a6ff; margin-left: 6px; min-width: 150px; }
+    #voiceBtn.on { background: linear-gradient(135deg, #00a884, #00ccff); border-color: transparent; box-shadow: 0 0 18px rgba(0, 204, 255, .45); }
 
     /* typing indicator */
     .typing .message-content-wrapper { display: flex; align-items: center; gap: 6px; padding: 14px 16px; }
@@ -336,6 +383,7 @@
     <p class="credits">Developed by Pranov</p>
     <span class="model-badge" id="modelBadge">Loading model…</span>
     <div class="header-actions">
+      <button id="voiceBtn" title="Max reads answers aloud">🔈 Voice</button>
       <button id="historyBtn" title="Load your previous messages">🔄 History</button>
       <button id="clearBtn" title="Delete your chat history">🗑️ Clear</button>
       <button id="logoutBtn">Logout</button>
@@ -364,10 +412,12 @@
     const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
     const fx = (fn) => window.MaxScene && fn(window.MaxScene);
 
-    // Which model is answering?
+    // Which model is answering, and which voice is available?
+    let ttsMode = "elevenlabs";
     fetch("/model_info")
       .then(r => r.json())
       .then(info => {
+        ttsMode = info.voice || "browser";
         if (info.ready) {
           badge.textContent = "Model: " + info.model;
         } else {
@@ -416,7 +466,7 @@
         const transcript = event.results[0][0].transcript.trim();
         if (transcript) {
           input.value = transcript;
-          sendMessage();
+          sendMessage(true);
         }
       };
       recognition.onend = recognition.onerror = () => {
@@ -451,8 +501,11 @@
         avatar.innerHTML = "<span>M</span>";
         msg.appendChild(avatar);
       }
+      const col = document.createElement("div");
+      col.className = "bubble-col";
       const wrapper = document.createElement("div");
       wrapper.className = "message-content-wrapper";
+      col.appendChild(wrapper);
 
       const parts = content.split(/```/g);
       parts.forEach((part, i) => {
@@ -485,8 +538,159 @@
         }
       });
 
-      msg.appendChild(wrapper);
+      msg.appendChild(col);
+      if (!isUser) addMeta(msg, content);
       return msg;
+    }
+
+    let lastCardTitle = null;
+    // Speak button under every answer, plus thinking steps, sources and a knowledge card when available
+    function addMeta(msg, content, data = {}) {
+      const col = msg.querySelector(".bubble-col");
+      let meta = col.querySelector(".meta");
+      if (!meta) {
+        meta = document.createElement("div");
+        meta.className = "meta";
+        const speakBtn = document.createElement("button");
+        speakBtn.className = "speak";
+        speakBtn.textContent = "🔊 Listen";
+        speakBtn.addEventListener("click", () => toggleSpeak(msg, content, speakBtn));
+        meta.appendChild(speakBtn);
+        col.appendChild(meta);
+      }
+      if (data.card && /^https?:/.test(data.card.url || "") && data.card.title !== lastCardTitle) {
+        lastCardTitle = data.card.title;     // a follow-up about the same topic doesn't repeat the card
+        const card = document.createElement("div");
+        card.className = "kcard";
+        if (data.card.image && /^https:/.test(data.card.image)) {
+          const img = document.createElement("img");
+          img.src = data.card.image; img.alt = ""; img.loading = "lazy";
+          img.onerror = () => img.remove();
+          card.appendChild(img);
+        }
+        const body = document.createElement("div");
+        const t = document.createElement("div"); t.className = "k-title"; t.textContent = data.card.title;
+        const d = document.createElement("div"); d.className = "k-desc"; d.textContent = data.card.description || "";
+        const sm = document.createElement("div"); sm.className = "k-sum"; sm.textContent = data.card.summary || "";
+        const a = document.createElement("a"); a.href = data.card.url; a.target = "_blank"; a.rel = "noopener"; a.textContent = "Read more on Wikipedia ↗";
+        body.append(t, d, sm, a);
+        card.appendChild(body);
+        col.insertBefore(card, col.firstChild);
+      }
+      if (data.thinking && data.thinking.length) {
+        const det = document.createElement("details");
+        det.className = "thoughts";
+        const sum = document.createElement("summary");
+        sum.textContent = `🧠 Thought for ${data.seconds ?? 0}s · ${data.thinking.length} steps`;
+        const ol = document.createElement("ol");
+        data.thinking.forEach(stp => {
+          const li = document.createElement("li");
+          const b = document.createElement("b"); b.textContent = stp.title;
+          const sp = document.createElement("span"); sp.textContent = stp.detail ? " — " + stp.detail : "";
+          const em = document.createElement("em"); em.textContent = `  ${stp.ms} ms`;
+          li.append(b, sp, em);
+          ol.appendChild(li);
+        });
+        det.append(sum, ol);
+        col.insertBefore(det, col.querySelector(".message-content-wrapper"));
+      }
+      (data.sources || []).forEach(src => {
+        if (!/^https?:/.test(src.url || "")) return;
+        const a = document.createElement("a");
+        a.className = "chip" + (src.url.includes("wiktionary") ? " wikt" : "");
+        a.href = src.url; a.target = "_blank"; a.rel = "noopener";
+        a.textContent = src.title.replace(/^Wik(ipedia|tionary): /, "");
+        a.title = src.title;
+        meta.appendChild(a);
+      });
+    }
+
+    // ── Voice ───────────────────────────────────────────────────────────────
+    let voiceOn = false, speakingMsg = null, audioEl = null, analyser = null, audioCtx = null, levelRaf = 0;
+    try { voiceOn = localStorage.getItem("maxVoice") === "1"; } catch (e) {}
+    const voiceBtn = document.getElementById("voiceBtn");
+    function paintVoiceBtn() {
+      voiceBtn.classList.toggle("on", voiceOn);
+      voiceBtn.textContent = voiceOn ? "🔊 Voice on" : "🔈 Voice";
+    }
+    paintVoiceBtn();
+    voiceBtn.addEventListener("click", () => {
+      voiceOn = !voiceOn;
+      try { localStorage.setItem("maxVoice", voiceOn ? "1" : "0"); } catch (e) {}
+      paintVoiceBtn();
+      if (!voiceOn) stopSpeaking();
+    });
+
+    function stopSpeaking() {
+      if (audioEl) { audioEl.pause(); audioEl = null; }
+      if (window.speechSynthesis) speechSynthesis.cancel();
+      cancelAnimationFrame(levelRaf);
+      if (speakingMsg) {
+        const av = speakingMsg.querySelector(".avatar");
+        if (av) { av.classList.remove("speaking"); av.style.removeProperty("--level"); }
+        const b = speakingMsg.querySelector(".speak");
+        if (b) { b.classList.remove("on"); b.textContent = "🔊 Listen"; }
+      }
+      speakingMsg = null;
+    }
+
+    function toggleSpeak(msg, text, btn) {
+      if (speakingMsg === msg) { stopSpeaking(); return; }
+      speak(msg, text);
+    }
+
+    // The avatar glows with the loudness of Max's voice.
+    function animateLevel(av, getLevel) {
+      cancelAnimationFrame(levelRaf);
+      const tick = () => {
+        av.style.setProperty("--level", getLevel().toFixed(3));
+        levelRaf = requestAnimationFrame(tick);
+      };
+      tick();
+    }
+
+    async function speak(msg, text) {
+      stopSpeaking();
+      speakingMsg = msg;
+      const av = msg.querySelector(".avatar"), btn = msg.querySelector(".speak");
+      if (btn) { btn.classList.add("on"); btn.textContent = "⏹ Stop"; }
+      if (av) av.classList.add("speaking");
+      try {
+        if (ttsMode !== "elevenlabs") throw new Error("no ElevenLabs voice");
+        const res = await fetch("/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
+        if (speakingMsg !== msg) return;
+        if (!res.ok) throw new Error("tts " + res.status);
+        const url = URL.createObjectURL(await res.blob());
+        audioEl = new Audio(url);
+        try {
+          audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+          const srcNode = audioCtx.createMediaElementSource(audioEl);
+          analyser = audioCtx.createAnalyser(); analyser.fftSize = 256;
+          srcNode.connect(analyser); analyser.connect(audioCtx.destination);
+          const buf = new Uint8Array(analyser.frequencyBinCount);
+          if (av) animateLevel(av, () => { analyser.getByteFrequencyData(buf); let sum = 0; for (const v of buf) sum += v; return Math.min(1, sum / buf.length / 110); });
+        } catch (e) { /* plays without the visualiser */ }
+        audioEl.onended = () => { URL.revokeObjectURL(url); if (speakingMsg === msg) stopSpeaking(); };
+        await audioEl.play();
+      } catch (e) {
+        browserSpeak(msg, text, av);
+      }
+    }
+
+    // Fallback: the browser's own voice, preferring a British male voice.
+    function browserSpeak(msg, text, av) {
+      if (!window.speechSynthesis) { stopSpeaking(); return; }
+      const clean = text.replace(/```[\s\S]*?(```|$)/g, " I've put the code on your screen. ").replace(/https?:\/\/\S+/g, "").replace(/[*_`#>|]/g, "");
+      const u = new SpeechSynthesisUtterance(clean.slice(0, 900));
+      const voices = speechSynthesis.getVoices();
+      const prefer = ["Daniel", "Google UK English Male", "Microsoft Ryan", "Arthur", "Oliver", "Microsoft George"];
+      u.voice = prefer.map(n => voices.find(v => v.name.includes(n))).find(Boolean)
+        || voices.find(v => v.lang === "en-GB") || null;
+      u.rate = 1.02; u.pitch = 0.85;
+      const t0 = performance.now();
+      if (av) animateLevel(av, () => 0.35 + 0.3 * Math.abs(Math.sin((performance.now() - t0) / 120)));
+      u.onend = u.onerror = () => { if (speakingMsg === msg) stopSpeaking(); };
+      speechSynthesis.speak(u);
     }
 
     function copyCode(btn, code) {
@@ -567,15 +771,24 @@
       msg.className = "message ai typing";
       msg.innerHTML = '<div class="avatar"><span>M</span></div>' +
         '<div class="message-content-wrapper"><span class="dot"></span><span class="dot"></span><span class="dot"></span>' +
-        '<span class="sr-only">Max is thinking…</span></div>';
+        '<span class="think-label">Thinking…</span></div>';
       messagesEl.appendChild(msg);
+      const labels = ["Understanding your question…", "Checking what I know…", "Searching Wikipedia…",
+                      "Reading the best sources…", "Putting the answer together…"];
+      let i = 0;
+      const label = msg.querySelector(".think-label");
+      msg._timer = setInterval(() => { if (i < labels.length) label.textContent = labels[i++]; }, 700);
+      label.textContent = labels[i++];
       scrollDown();
       return msg;
     }
 
-    async function sendMessage() {
+    let spokenQuestion = false;   // set when the question came from the microphone
+    async function sendMessage(fromMic = false) {
       const value = input.value.trim();
       if (!value || sendBtn.disabled) return;
+      spokenQuestion = fromMic === true;
+      stopSpeaking();
 
       const r = sendBtn.getBoundingClientRect();
       fx(s => s.burst(r.left + r.width / 2, r.top + r.height / 2, "purple", 40));
@@ -597,8 +810,11 @@
           return;
         }
         const data = await res.json();
+        clearInterval(thinking._timer);
         thinking.remove();
-        const el = addMessage(data.reply || data.error || "No reply.");
+        const replyText = data.reply || data.error || "No reply.";
+        const el = addMessage(replyText);
+        addMeta(el, replyText, data);
         el.classList.add("new");
         fx(s => {
           s.excite(1.4);
@@ -606,7 +822,9 @@
           s.burst(b.left + 24, b.bottom - 16, "orange", 28);
         });
         await typeOut(el);
+        if (voiceOn || spokenQuestion) speak(el, replyText);
       } catch (err) {
+        clearInterval(thinking._timer);
         thinking.remove();
         addMessage("❌ Error: " + err.message);
       } finally {
@@ -616,13 +834,14 @@
       }
     }
 
-    sendBtn.addEventListener("click", sendMessage);
+    sendBtn.addEventListener("click", () => sendMessage());
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         sendMessage();
       }
     });
+    if (window.speechSynthesis) speechSynthesis.getVoices();   // load the voice list early
 
     // Fade the visible messages out before emptying the list
     function clearMessages() {
@@ -653,6 +872,7 @@
 
     document.getElementById("clearBtn").addEventListener("click", async () => {
       if (!confirm("Delete your whole chat history?")) return;
+      stopSpeaking();
       await fetch("/clear_history", { method: "POST" });
       await clearMessages();
       const r = messagesEl.getBoundingClientRect();
