@@ -1,0 +1,77 @@
+name: Train MaxGPT
+
+# Trains Max AI's own language model on GitHub's machines and commits the
+# trained weights (Max.AI/maxgpt/checkpoints/) back to the repository.
+# Runs automatically when the model code or training data changes, or by hand:
+# Actions tab -> "Train MaxGPT" -> Run workflow.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Max.AI/maxgpt/*.py"
+      - "Max.AI/maxgpt/data/**"
+  workflow_dispatch:
+    inputs:
+      preset:
+        description: "Model size: tiny, small, base or large"
+        default: "small"
+      steps:
+        description: "Training steps"
+        default: "4000"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: train-maxgpt
+  cancel-in-progress: true
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    defaults:
+      run:
+        working-directory: Max.AI
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install NumPy (MaxGPT's only dependency)
+        run: pip install numpy
+
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Train
+        run: |
+          python -m maxgpt.train \
+            --preset "${{ github.event.inputs.preset || 'small' }}" \
+            --steps "${{ github.event.inputs.steps || '4000' }}" \
+            --batch 16 --eval-every 500
+
+      - name: Quick answer check
+        run: |
+          python - <<'EOF'
+          from maxgpt.chat import MaxGPTEngine
+          engine = MaxGPTEngine(temperature=0)
+          for q in ["Who are you?", "What is a list in Python?", "How do I center a div?"]:
+              print(f"Q: {q}\nA: {engine.reply([('user', q)])}\n")
+          EOF
+
+      - name: Commit trained weights
+        working-directory: .
+        run: |
+          git config user.name "maxgpt-trainer[bot]"
+          git config user.email "maxgpt-trainer@users.noreply.github.com"
+          git add -f Max.AI/maxgpt/checkpoints/maxgpt.npz Max.AI/maxgpt/checkpoints/tokenizer.json
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update trained MaxGPT weights [skip ci]"
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
