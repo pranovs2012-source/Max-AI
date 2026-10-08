@@ -47,7 +47,10 @@ for convo in CONVERSATIONS:
         print("   card:", result["card"]["title"], "|", result["card"].get("image"))
     lines = [l for l in result["reply"].splitlines() if l.strip()]
     source = result["sources"][0]["title"] if result["sources"] else "-"
+    read = next((s["detail"] for s in result["thinking"] if s["title"].startswith("Reading")), "")
     summary.append(f"[{result['route']:>9}] {' → '.join(convo)[:60]:60} | {source[:45]:45} | {' / '.join(lines[:3])[:150]}")
+    if read:
+        summary.append(" " * 12 + "read: " + read[:200])
     if convo[0] == "top 10 fastest cars" and sum(l[:3].rstrip(".").isdigit() for l in result["reply"].splitlines()) < 5:
         failures.append("ranking list")
     if convo[0] == "Who is Elon Musk?" and "2002" not in result["reply"]:
@@ -67,5 +70,6 @@ print("=" * 100)
 print("SUMMARY")
 print("\n".join(summary))
 if failures:
+    print("FAILED:", ", ".join(failures))
     sys.exit("Broken: " + ", ".join(failures))
 print("All core checks passed.")

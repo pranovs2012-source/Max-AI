@@ -57,6 +57,9 @@ MEASURES = [
     (r"new|recent|latest", ["year", "date", "released"], True),
     (r"valuable|revenue|biggest compan", ["revenue", "market", "value", "valuation"], True),
 ]
+SUPER_WORDS = set("top best most least largest biggest fastest tallest highest longest richest oldest newest smallest "
+                  "slowest shortest deepest heaviest cheapest expensive popular populous selling grossing ranked "
+                  "ranking famous greatest".split())
 NEUTRAL = set("list world global all time ever history record records the by of in and top current".split())
 TIME_HEADER = re.compile(r"0\s*[–-]|\(s\)|seconds|\btime\b|lap", re.I)
 NAME_HEADERS = ("name", "model", "car", "vehicle", "country", "city", "company", "person", "title", "building",
@@ -278,10 +281,16 @@ class Assistant:
                         seen.add(h["title"])
                         candidates.append(h["title"])
         qt = set(terms(core))
-        wanted = qt | self.measure_terms(q)
+        measure = self.measure_terms(q)
+        wanted = qt | measure
+        subject = qt - SUPER_WORDS - measure - {"world"}
+
+        def title_score(t):
+            tt = set(terms(t))
+            return (t.lower().startswith("list of") + 2 * len(subject & tt) + (1 if measure & tt else 0)
+                    - 2.5 * self.extra_words(t, wanted))
         order = {t: i for i, t in enumerate(candidates)}
-        candidates.sort(key=lambda t: (-(t.lower().startswith("list of") + 2 * len(wanted & set(terms(t)))
-                                         - 1.5 * self.extra_words(t, wanted)), order[t]))
+        candidates.sort(key=lambda t: (-title_score(t), order[t]))
         candidates = candidates[:5]
         if not candidates:
             return None
@@ -293,7 +302,7 @@ class Assistant:
             if not page_html:
                 continue
             for table in web.tables(page_html):
-                pick = self.score_table(table, q, title, wanted)
+                pick = self.score_table(table, q, title, wanted, subject, measure)
                 if pick and (best is None or pick["score"] > best["score"]):
                     best = dict(pick, page=title)
         if best is None:
@@ -332,10 +341,14 @@ class Assistant:
             return title, None
 
     @staticmethod
-    def score_table(table, q, title, qt):
+    def score_table(table, q, title, qt, subject=frozenset(), measure=frozenset()):
         headers = [h.lower() for h in table["headers"]]
         rows = table["rows"]
         if len(rows) < 3 or len(headers) < 2:
+            return None
+        # the table must be about what was asked ("cars", not "animals")
+        about = set(terms(title + " " + table["caption"] + " " + " ".join(headers)))
+        if subject and not (subject & about) and not (measure & set(terms(title))):
             return None
         ql = q.lower()
         value_col, descending, measure_hit = None, True, False
