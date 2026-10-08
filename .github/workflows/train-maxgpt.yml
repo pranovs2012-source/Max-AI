@@ -14,16 +14,17 @@ on:
       - "Max.AI/maxgpt/optim.py"
       - "Max.AI/maxgpt/tokenizer.py"
       - "Max.AI/maxgpt/train.py"
+      - "Max.AI/maxgpt/knowledge.py"
       - "Max.AI/maxgpt/data/chat/**"
       - "Max.AI/maxgpt/data/text/**"
   workflow_dispatch:
     inputs:
       preset:
         description: "Model size: tiny, small, base or large"
-        default: "small"
+        default: "base"
       steps:
         description: "Training steps"
-        default: "5000"
+        default: "8000"
 
 permissions:
   contents: write
@@ -35,7 +36,7 @@ concurrency:
 jobs:
   train:
     runs-on: ubuntu-latest
-    timeout-minutes: 300
+    timeout-minutes: 345
     defaults:
       run:
         working-directory: Max.AI
@@ -49,14 +50,17 @@ jobs:
       - name: Install NumPy (MaxGPT's only dependency)
         run: pip install numpy
 
+      - name: Generate world-knowledge conversations
+        run: python -m maxgpt.knowledge
+
       - name: Run tests
         run: python -m unittest discover -s tests -v
 
       - name: Train
         run: |
           python -m maxgpt.train \
-            --preset "${{ github.event.inputs.preset || 'small' }}" \
-            --steps "${{ github.event.inputs.steps || '5000' }}" \
+            --preset "${{ github.event.inputs.preset || 'base' }}" \
+            --steps "${{ github.event.inputs.steps || '8000' }}" \
             --batch 16 --eval-every 500
 
       - name: Quick answer check
@@ -64,7 +68,8 @@ jobs:
           python - <<'EOF'
           from maxgpt.chat import MaxGPTEngine
           engine = MaxGPTEngine(temperature=0)
-          for q in ["Who are you?", "What is a list in Python?", "How do I center a div?"]:
+          for q in ["Who are you?", "Who is Pranov?", "What is the capital of Japan?",
+                    "What is photosynthesis?", "What is a list in Python?", "How do I center a div?"]:
               print(f"Q: {q}\nA: {engine.reply([('user', q)])}\n")
           EOF
 
@@ -73,11 +78,12 @@ jobs:
         run: |
           git config user.name "maxgpt-trainer[bot]"
           git config user.email "maxgpt-trainer@users.noreply.github.com"
-          git add -f Max.AI/maxgpt/checkpoints/maxgpt.npz Max.AI/maxgpt/checkpoints/tokenizer.json
+          git add -f Max.AI/maxgpt/checkpoints/maxgpt.npz Max.AI/maxgpt/checkpoints/tokenizer.json \
+            Max.AI/maxgpt/data/chat/20_world_facts.txt
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Update trained MaxGPT weights [skip ci]"
+            git commit -m "Update trained MaxGPT weights and world-knowledge data [skip ci]"
             git pull --rebase origin "${GITHUB_REF_NAME}"
             git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
