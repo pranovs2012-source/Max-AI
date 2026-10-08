@@ -29,7 +29,7 @@ CONVERSATIONS = [
 ]
 
 assistant = Assistant(MaxGPTEngine())
-failures = []
+failures, summary = [], []
 for convo in CONVERSATIONS:
     history, result = [], None
     for q in convo:
@@ -45,6 +45,9 @@ for convo in CONVERSATIONS:
         print("   sources:", ", ".join(s["url"] for s in result["sources"]))
     if result["card"]:
         print("   card:", result["card"]["title"], "|", result["card"].get("image"))
+    lines = [l for l in result["reply"].splitlines() if l.strip()]
+    source = result["sources"][0]["title"] if result["sources"] else "-"
+    summary.append(f"[{result['route']:>9}] {' → '.join(convo)[:60]:60} | {source[:45]:45} | {' / '.join(lines[:3])[:150]}")
     if convo[0] == "top 10 fastest cars" and sum(l[:3].rstrip(".").isdigit() for l in result["reply"].splitlines()) < 5:
         failures.append("ranking list")
     if convo[0] == "Who is Elon Musk?" and "2002" not in result["reply"]:
@@ -61,6 +64,8 @@ for convo in CONVERSATIONS:
         failures.append("follow-up from memory")
 
 print("=" * 100)
+print("SUMMARY")
+print("\n".join(summary))
 if failures:
     sys.exit("Broken: " + ", ".join(failures))
 print("All core checks passed.")

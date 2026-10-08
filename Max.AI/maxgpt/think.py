@@ -42,7 +42,7 @@ MEASURES = [
     (r"tall|height", ["height", "metres", "meters", "feet", "ft", "floors"], True),
     (r"high|elevation", ["elevation", "height", "altitude", "metres", "m"], True),
     (r"populous|population|people", ["population"], True),
-    (r"rich|wealth|net worth|billionaire", ["net worth", "worth", "wealth", "billion"], True),
+    (r"rich|wealth|net worth|billionaire", ["net worth", "worth", "wealth", "billion", "billionaire"], True),
     (r"long|length", ["length", "km", "mi"], True),
     (r"deep|depth", ["depth"], True),
     (r"heav|mass|weight", ["mass", "weight", "kg", "tonnes"], True),
@@ -204,7 +204,8 @@ class Assistant:
         context = " ".join(asked[-3:-2] + asked[-2:-1] * 2) or None
         turns = guard.match(q, previous, context)
         score, _ = guard.score(q)
-        if turns is not None and turns[-1][1].strip().lower() != q.strip().lower() and previous:
+        if turns is not None and previous and turns[-1][1].strip().lower() != q.strip().lower() \
+                and set(terms(turns[-1][1])) & set(terms(" ".join(asked[:-1][-2:]))):
             score = max(score, 0.8)
         return turns, score
 
@@ -267,7 +268,7 @@ class Assistant:
                       r"in the world|of all time|ever|ranking|ranked)\b", " ", q, flags=re.I)
         core = re.sub(r"[^\w\s\-']", " ", core).strip()
         core = re.sub(r"\s+", " ", core)
-        queries = [f"list of {core}", core, f"{core} in the world"]
+        queries = [f"list of {core}", core, f"{core} in the world", f"world's {core}"]
         th.step("Searching Wikipedia for rankings", " · ".join(f"“{s}”" for s in queries))
         seen, candidates = set(), []
         with ThreadPoolExecutor(4) as pool:
@@ -374,7 +375,8 @@ class Assistant:
     def ranked_rows(pick, want):
         table, nc, vc = pick["table"], pick["name_col"], pick["value_col"]
         headers = table["headers"]
-        rows = [r for r in table["rows"] if r[nc]]
+        aggregate = re.compile(r"^(world|total|totals|sum|average|mean|other|others|rest of the world|—|-)$", re.I)
+        rows = [r for r in table["rows"] if r[nc] and not aggregate.match(r[nc].strip(" *†‡"))]
         if vc is not None:
             rows = [r for r in rows if web.number(r[vc]) is not None]
             rows.sort(key=lambda r: web.number(r[vc]), reverse=pick["descending"])
@@ -450,7 +452,7 @@ class Assistant:
     def split_sentences(text):
         text = re.sub(r"\s*\n+\s*", " ", text)
         text = re.sub(r"\s*\([^()]{0,80}\)", "", text)  # pronunciations and asides
-        parts = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9\"'])", text)
+        parts = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9\"'])|(?<=[।。！？])\s*", text)
         return [p.strip() for p in parts if 25 <= len(p.strip()) <= 400]
 
     def best_sentences(self, q, pages, limit=4, max_chars=700, context=""):
@@ -472,7 +474,8 @@ class Assistant:
         first = next(x for x in scored if x[0] == 0)            # definition sentence of the best article
         rest = sorted((x for x in scored if x is not first and x[3] > 0), key=lambda x: -x[3])
         # A precise question ("when did he found SpaceX?") leads with the sentence that answers it.
-        if self.needs_detail(q) and rest and rest[0][3] > max(first[3], 0) + 0.5:
+        precise = self.needs_detail(q) or web.detect_language(q) != "en"
+        if precise and rest and rest[0][3] > max(first[3], 0) + 0.5:
             first, rest = rest[0], rest[1:]
             limit = min(limit, 2)
         chosen, size = [first], len(first[2])
@@ -495,7 +498,9 @@ class Assistant:
             pages = web.articles([hits[0]["title"]], lang=lang)
         except web.WebError:
             return
-        if pages and set(terms(query)) & set(terms(pages[0]["title"])):
+        qt = set(terms(query))
+        title = set(terms(pages[0]["title"])) if pages else set()
+        if pages and len(qt & title) >= min(2, len(qt)) and self.extra_words(pages[0]["title"], qt) <= 1:
             self.set_card(pages[0], th)
             th.source(f"Wikipedia: {pages[0]['title']}", pages[0]["url"])
             th.step("Adding a knowledge card", pages[0]["title"])
