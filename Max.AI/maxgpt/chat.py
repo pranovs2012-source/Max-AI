@@ -7,6 +7,7 @@ import argparse
 import os
 import threading
 
+from . import calc
 from .data import SYSTEM_PROMPT, default_files, format_prompt
 from .guard import KnowledgeGuard
 from .model import GPT
@@ -56,10 +57,20 @@ class MaxGPTEngine:
         asked = [text for role, text in history if role == "user"]
         question = asked[-1] if asked else ""
         previous = asked[-2] if len(asked) > 1 else None
-        if self.guard and not self.guard.knows(question, previous):
-            self.guard.log_unknown(question)
-            yield UNKNOWN_REPLY
+        result = calc.answer(question)
+        if result:  # exact arithmetic instead of a guess
+            yield result
             return
+        if self.guard:
+            prompt_turns = self.guard.match(question, previous)
+            if prompt_turns is None:
+                self.guard.log_unknown(question)
+                yield UNKNOWN_REPLY
+                return
+            if opts.get("rewrite", True):
+                # A small model answers best in the setting it was trained on, so it is prompted
+                # with the closest training question (and earlier turns for follow-ups).
+                history = prompt_turns
         max_new = min(opts["max_new_tokens"], self.model.config.n_ctx // 2)
         ids = self._prompt_ids(history, system, max_new)
         with self._lock:

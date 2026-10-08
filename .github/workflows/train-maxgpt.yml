@@ -7,9 +7,15 @@ name: Train MaxGPT
 on:
   push:
     branches: [main]
-    paths:
-      - "Max.AI/maxgpt/*.py"
-      - "Max.AI/maxgpt/data/**"
+    paths:  # only what changes the trained model (not chat.py / guard.py)
+      - "Max.AI/maxgpt/autograd.py"
+      - "Max.AI/maxgpt/data.py"
+      - "Max.AI/maxgpt/model.py"
+      - "Max.AI/maxgpt/optim.py"
+      - "Max.AI/maxgpt/tokenizer.py"
+      - "Max.AI/maxgpt/train.py"
+      - "Max.AI/maxgpt/data/chat/**"
+      - "Max.AI/maxgpt/data/text/**"
   workflow_dispatch:
     inputs:
       preset:
@@ -17,7 +23,7 @@ on:
         default: "small"
       steps:
         description: "Training steps"
-        default: "4000"
+        default: "5000"
 
 permissions:
   contents: write
@@ -50,7 +56,7 @@ jobs:
         run: |
           python -m maxgpt.train \
             --preset "${{ github.event.inputs.preset || 'small' }}" \
-            --steps "${{ github.event.inputs.steps || '4000' }}" \
+            --steps "${{ github.event.inputs.steps || '5000' }}" \
             --batch 16 --eval-every 500
 
       - name: Quick answer check
