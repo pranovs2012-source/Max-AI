@@ -96,6 +96,29 @@ class GuardTest(unittest.TestCase):
         self.assertFalse(self.guard.knows("what about kubernetes"))
         self.assertTrue(self.guard.knows("in python", previous="How do I merge two dictionaries?"))
 
+    def test_match_prompts(self):
+        # a known question is passed to the model in its trained wording
+        self.assertEqual(self.guard.match("merge 2 dicts"), [("user", "How do I merge two dictionaries?")])
+        # a trained follow-up gets the earlier turns of that training conversation
+        turns = self.guard.match("thanks", previous="show me code")
+        self.assertEqual([r for r, _ in turns], ["user", "assistant", "user"])
+        self.assertEqual(turns[0][1], "Show code")
+        # small talk after an unrelated question is not mistaken for that follow-up
+        self.assertEqual(self.guard.match("thanks!", previous="What is Python?"), [("user", "thanks!")])
+        self.assertIsNone(self.guard.match("What is Kubernetes?"))
+
+
+class CalcTest(unittest.TestCase):
+    def test_arithmetic(self):
+        from maxgpt import calc
+        self.assertEqual(calc.answer("What is 7 * 8?"), "7 * 8 = 56")
+        self.assertEqual(calc.answer("12 divided by 4"), "12 / 4 = 3")
+        self.assertEqual(calc.answer("what's (2 + 3) times 4"), "(2 + 3) * 4 = 20")
+        self.assertIsNone(calc.answer("What is Python?"))
+        self.assertIsNone(calc.answer("1 / 0"))
+        self.assertIsNone(calc.answer("__import__('os')"))
+        self.assertIsNone(calc.answer("9 ** 9999"))
+
 
 class ModelTest(unittest.TestCase):
     def setUp(self):
