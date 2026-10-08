@@ -5,242 +5,331 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
+    @property --spin { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+
+    :root {
+      --bg: #05010f;
+      --panel: rgba(10, 5, 26, 0.62);
+      --glass: rgba(14, 7, 34, 0.55);
+      --line: rgba(180, 100, 255, 0.22);
+      --text: #ece4ff;
+      --muted: #a996d6;
+      --accent: #cc44ff;
+      --accent2: #ff6a00;
+      --accent3: #00ccff;
+      --spring: cubic-bezier(.2, 1.35, .35, 1);
     }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      background-color: #121212;
-      color: #bbdefb;  /* blue-ish text */
-      font-family: 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
       height: 100vh;
+      height: 100dvh;
       display: flex;
       flex-direction: column;
+      overflow: hidden;
     }
 
+    /* ── Header ───────────────────────────────────────────────── */
     .header {
-      padding: 15px 20px;
-      text-align: center;
-      border-bottom: 1px solid #333;
       position: relative;
-      background-color: #1e1e1e;
+      z-index: 2;
+      padding: 14px 20px 12px;
+      text-align: center;
+      background: var(--glass);
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(14px) saturate(140%);
+      -webkit-backdrop-filter: blur(14px) saturate(140%);
+      animation: dropIn .8s var(--spring) both;
     }
+    .header::after {               /* light sweeping along the bottom edge */
+      content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent), var(--accent2), var(--accent3), transparent);
+      background-size: 200% 100%;
+      animation: sweep 6s linear infinite;
+      opacity: .8;
+    }
+    @keyframes sweep { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+    @keyframes dropIn { from { opacity: 0; transform: translateY(-24px); } to { opacity: 1; transform: none; } }
 
     .logo {
-      color: #e53935;  /* red */
-      font-size: 42px;
+      font-size: 40px;
       font-weight: 900;
       font-style: italic;
-      margin: 0;
+      letter-spacing: 3px;
+      background: linear-gradient(100deg, #ff3d3d, #ff6a00, #cc44ff, #00ccff, #ff3d3d);
+      background-size: 300% auto;
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent;
+      filter: drop-shadow(0 0 18px rgba(204, 68, 255, .35));
+      animation: logoFlow 8s linear infinite;
     }
+    @keyframes logoFlow { to { background-position: 300% center; } }
 
-    .subtitle {
-      font-size: 16px;
-      color: #90caf9;
-    }
-
-    .credits {
-      font-size: 12px;
-      color: #78909c;
-      margin-top: 5px;
-    }
+    .subtitle { font-size: 15px; color: #b9a6ff; }
+    .credits { font-size: 12px; color: var(--muted); margin-top: 3px; opacity: .8; }
 
     .model-badge {
-      display: inline-block;
-      margin-top: 6px;
-      padding: 2px 10px;
-      border-radius: 999px;
-      font-size: 12px;
-      background: #263238;
-      color: #80cbc4;
+      display: inline-flex; align-items: center; gap: 7px;
+      margin-top: 7px; padding: 3px 12px;
+      border-radius: 999px; font-size: 12px;
+      background: rgba(255, 255, 255, .05);
+      border: 1px solid var(--line);
+      color: #9ff5e6;
     }
-
-    .model-badge.offline {
-      color: #ef9a9a;
+    .model-badge::before {
+      content: ""; width: 7px; height: 7px; border-radius: 50%;
+      background: #40ffc8; box-shadow: 0 0 10px #40ffc8;
+      animation: pulse 1.8s ease-in-out infinite;
     }
+    .model-badge.offline { color: #ffaaaa; }
+    .model-badge.offline::before { background: #ff5577; box-shadow: 0 0 10px #ff5577; }
+    @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(.6); opacity: .5; } }
 
     .header-actions {
-      position: absolute;
-      top: 16px;
-      right: 20px;
-      display: flex;
-      gap: 8px;
+      position: absolute; top: 16px; right: 20px;
+      display: flex; gap: 8px;
     }
-
     .header-actions button {
-      border: none;
+      position: relative; overflow: hidden;
+      border: 1px solid var(--line);
       padding: 8px 14px;
-      border-radius: 5px;
+      border-radius: 10px;
       cursor: pointer;
       font-size: 14px;
-      color: white;
+      color: #fff;
+      background: rgba(255, 255, 255, .06);
+      transition: transform .2s var(--spring), background .25s, box-shadow .25s;
     }
+    .header-actions button:hover { transform: translateY(-2px); background: rgba(204, 68, 255, .18); box-shadow: 0 6px 20px rgba(204, 68, 255, .25); }
+    .header-actions button:active { transform: scale(.95); }
+    #logoutBtn { background: linear-gradient(135deg, #e53935, #ff6a00); border-color: transparent; }
+    #logoutBtn:hover { box-shadow: 0 6px 22px rgba(255, 80, 40, .45); }
 
-    #logoutBtn { background: #e53935; }
-    #historyBtn, #clearBtn { background: #37474f; }
-
+    /* ── Chat ─────────────────────────────────────────────────── */
     .chat-container {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      max-width: 900px;
-      width: 100%;
-      margin: 0 auto;
-      padding: 10px;
+      position: relative; z-index: 1;
+      flex: 1; display: flex; flex-direction: column;
+      max-width: 920px; width: 100%;
+      margin: 0 auto; padding: 12px;
       min-height: 0;
     }
 
     .messages {
       flex: 1;
       overflow-y: auto;
-      padding: 10px;
-      background-color: #1e1e1e;
-      border-radius: 10px;
-      margin-bottom: 10px;
+      overflow-x: hidden;
+      padding: 18px 14px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      margin-bottom: 12px;
+      box-shadow: inset 0 0 60px rgba(120, 40, 255, .08), 0 20px 60px rgba(0, 0, 0, .35);
+      scrollbar-width: thin;
+      scrollbar-color: rgba(204, 68, 255, .4) transparent;
+      animation: riseIn .9s .1s var(--spring) both;
     }
+    .messages::-webkit-scrollbar { width: 8px; }
+    .messages::-webkit-scrollbar-thumb { background: linear-gradient(var(--accent), var(--accent3)); border-radius: 8px; }
+    @keyframes riseIn { from { opacity: 0; transform: translateY(30px) scale(.97); } to { opacity: 1; transform: none; } }
 
     .message {
-      margin-bottom: 12px;
-      display: flex;
+      display: flex; align-items: flex-end; gap: 10px;
+      margin-bottom: 14px;
+      animation: msgIn .6s var(--spring) both;
+      transform-origin: bottom left;
     }
+    .message.user { justify-content: flex-end; transform-origin: bottom right; animation-name: msgInUser; }
+    .message.leaving { animation: msgOut .35s ease-in forwards !important; }
+    @keyframes msgIn {
+      0% { opacity: 0; transform: translate(-14px, 16px) scale(.9); filter: blur(6px); }
+      55% { opacity: 1; filter: blur(0); }
+      100% { opacity: 1; transform: none; }
+    }
+    @keyframes msgInUser {
+      0% { opacity: 0; transform: translate(14px, 16px) scale(.9); filter: blur(6px); }
+      55% { opacity: 1; filter: blur(0); }
+      100% { opacity: 1; transform: none; }
+    }
+    @keyframes msgOut { to { opacity: 0; transform: translateY(-10px) scale(.94); filter: blur(4px); } }
 
-    .message.ai {
-      justify-content: flex-start;
+    .avatar {
+      flex: 0 0 auto;
+      width: 34px; height: 34px; border-radius: 50%;
+      display: grid; place-items: center;
+      font-weight: 800; font-size: 15px; color: #fff;
+      background: conic-gradient(from var(--spin), #cc44ff, #ff6a00, #00ccff, #cc44ff);
+      box-shadow: 0 0 16px rgba(204, 68, 255, .55);
+      animation: spin 4s linear infinite;
+      position: relative;
     }
-
-    .message.user {
-      justify-content: flex-end;
-    }
+    .avatar span { position: relative; z-index: 1; text-shadow: 0 0 6px rgba(0, 0, 0, .6); }
+    .avatar::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: #1a0b33; }
+    @keyframes spin { to { --spin: 360deg; } }
 
     .message-content-wrapper {
-      max-width: 85%;
-      padding: 10px 14px;
+      position: relative;
+      max-width: min(78%, 680px);
+      padding: 11px 15px;
       white-space: pre-wrap;
       word-wrap: break-word;
+      line-height: 1.5;
+      font-size: 15px;
     }
-
     .message.ai .message-content-wrapper {
-      background: #ffffff;
-      color: #212121;
-      border-radius: 12px 12px 12px 0;
+      color: var(--text);
+      background: linear-gradient(150deg, rgba(48, 22, 92, .88), rgba(20, 10, 46, .9));
+      border: 1px solid rgba(190, 120, 255, .28);
+      border-radius: 16px 16px 16px 4px;
+      box-shadow: 0 8px 28px rgba(80, 20, 180, .3), inset 0 1px 0 rgba(255, 255, 255, .08);
     }
-
     .message.user .message-content-wrapper {
-      background: #29b6f6;
-      color: #ffffff;
-      border-radius: 12px 12px 0 12px;
+      color: #fff;
+      background: linear-gradient(135deg, #7a1fd6, #c2389a 60%, #e0551d);
+      border-radius: 16px 16px 4px 16px;
+      box-shadow: 0 8px 26px rgba(194, 56, 154, .35);
     }
-
-    .message.thinking .message-content-wrapper {
-      color: #607d8b;
-      font-style: italic;
+    .message.ai.new .message-content-wrapper::before {    /* shine passing over a fresh answer */
+      content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+      background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, .12) 50%, transparent 70%);
+      background-size: 250% 100%;
+      animation: shine 1.4s .2s ease-out both;
     }
+    @keyframes shine { from { background-position: 150% 0; } to { background-position: -100% 0; } }
 
+    .caret {
+      display: inline-block; width: 8px; height: 1.05em;
+      margin-left: 2px; vertical-align: text-bottom; border-radius: 2px;
+      background: linear-gradient(var(--accent), var(--accent3));
+      box-shadow: 0 0 10px var(--accent);
+      animation: blink .9s steps(1) infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    /* typing indicator */
+    .typing .message-content-wrapper { display: flex; align-items: center; gap: 6px; padding: 14px 16px; }
+    .typing .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: linear-gradient(var(--accent), var(--accent3));
+      box-shadow: 0 0 10px rgba(204, 68, 255, .8);
+      animation: bounce 1.1s var(--spring) infinite;
+    }
+    .typing .dot:nth-child(2) { animation-delay: .15s; }
+    .typing .dot:nth-child(3) { animation-delay: .3s; }
+    @keyframes bounce { 0%, 60%, 100% { transform: translateY(0) scale(1); opacity: .5; } 30% { transform: translateY(-7px) scale(1.15); opacity: 1; } }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+    /* code blocks */
     .code-block {
-      background: #0d1117;
-      border: 1px solid #21262d;
-      border-radius: 6px;
+      background: rgba(4, 2, 14, .85);
+      border: 1px solid rgba(120, 80, 220, .35);
+      border-radius: 10px;
       padding: 10px 12px;
       margin: 8px 0;
-      font-family: 'Courier New', monospace;
-      position: relative;
+      font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
       white-space: normal;
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, .3), 0 10px 30px rgba(0, 0, 0, .35);
     }
-
     .code-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 6px;
-      font-size: 12px;
-      color: #adbac7;
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 6px; font-size: 12px; color: #b9a6ff;
     }
-
-    .code-header span.language {
-      font-weight: 500;
-    }
-
+    .code-header span.language { font-weight: 600; letter-spacing: .5px; text-transform: lowercase; }
     .code-header .copy-btn {
-      background: #0066cc;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      padding: 2px 6px;
-      font-size: 10px;
-      cursor: pointer;
-      transition: 0.15s background;
+      background: linear-gradient(135deg, #6a1fd6, #0088cc);
+      color: #fff; border: none; border-radius: 6px;
+      padding: 3px 8px; font-size: 11px; cursor: pointer;
+      transition: transform .2s var(--spring), box-shadow .2s;
     }
+    .code-header .copy-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0, 136, 204, .5); }
+    .code-content { margin: 0; white-space: pre-wrap; font-size: 13px; color: #e8e2ff; }
 
-    .code-header .copy-btn:hover {
-      background: #29b6f6;
-    }
-
-    .code-content {
-      margin: 0;
-      white-space: pre-wrap;
-      font-size: 13px;
-      color: #e6e6e6;
-    }
-
+    /* ── Input ────────────────────────────────────────────────── */
     .input-area {
-      display: flex;
-      align-items: center;
-      gap: 8px;
+      position: relative;
+      display: flex; align-items: center; gap: 8px;
       padding: 10px 12px;
-      background: #1e1e1e;
-      border-radius: 10px;
-      border: 1px solid #333;
+      background: var(--glass);
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      animation: riseIn .9s .2s var(--spring) both;
+      transition: box-shadow .4s;
     }
+    .input-area::before {          /* animated neon border while typing */
+      content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1.5px; pointer-events: none;
+      background: conic-gradient(from var(--spin), #cc44ff, #ff6a00, #00ccff, #cc44ff);
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor; mask-composite: exclude;
+      opacity: 0; transition: opacity .4s;
+      animation: spin 3s linear infinite;
+    }
+    .input-area:focus-within::before { opacity: 1; }
+    .input-area:focus-within { box-shadow: 0 0 40px rgba(204, 68, 255, .25); }
 
     #messageInput {
-      flex: 1;
-      resize: none;
+      flex: 1; resize: none;
       padding: 10px 12px;
-      background: #2b2b2b;
-      color: #d1d5da;
-      border: 1px solid #3a3a3a;
-      border-radius: 8px;
-      font-size: 14px;
+      background: rgba(255, 255, 255, .04);
+      color: var(--text);
+      border: 1px solid rgba(255, 255, 255, .06);
+      border-radius: 10px;
+      font: inherit; font-size: 15px;
       outline: none;
-      max-height: 120px;
+      max-height: 140px;
     }
+    #messageInput::placeholder { color: rgba(185, 166, 255, .45); }
 
-    #sendBtn,
-    #micBtn {
+    #sendBtn, #micBtn {
+      position: relative;
       flex: 0 0 auto;
-      width: 46px;
-      height: 46px;
-      border: none;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 20px;
-      cursor: pointer;
-      background: #29b6f6;
-      color: #ffffff;
+      width: 46px; height: 46px;
+      border: none; border-radius: 50%;
+      display: grid; place-items: center;
+      font-size: 19px; cursor: pointer; color: #fff;
+      background: linear-gradient(135deg, #8a2be2, #ff6a00);
+      box-shadow: 0 6px 18px rgba(170, 60, 255, .35);
+      transition: transform .25s var(--spring), box-shadow .3s, filter .3s;
+      overflow: hidden;
     }
+    #micBtn { background: linear-gradient(135deg, #0077cc, #8a2be2); }
+    #sendBtn:hover:not(:disabled), #micBtn:hover:not(:disabled) { transform: translateY(-2px) scale(1.06); filter: brightness(1.15); box-shadow: 0 10px 28px rgba(204, 68, 255, .55); }
+    #sendBtn:active:not(:disabled), #micBtn:active:not(:disabled) { transform: scale(.9); }
+    #sendBtn:disabled, #micBtn:disabled { opacity: .55; cursor: default; }
+    #sendBtn.busy::after {         /* spinning ring while Max answers */
+      content: ""; position: absolute; inset: 4px; border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, .25); border-top-color: #fff;
+      animation: turn .8s linear infinite;
+    }
+    @keyframes turn { to { transform: rotate(360deg); } }
+    #micBtn.live { animation: micPulse 1.2s ease-in-out infinite; background: linear-gradient(135deg, #ff1744, #ff6a00); }
+    @keyframes micPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 23, 68, .6); } 50% { box-shadow: 0 0 0 12px rgba(255, 23, 68, 0); } }
 
-    #sendBtn:hover,
-    #micBtn:hover {
-      filter: brightness(1.15);
+    .ripple {
+      position: absolute; border-radius: 50%; pointer-events: none;
+      background: rgba(255, 255, 255, .55);
+      transform: scale(0); animation: ripple .6s ease-out forwards;
     }
-
-    #sendBtn:disabled,
-    #micBtn:disabled {
-      opacity: 0.5;
-      cursor: default;
-    }
+    @keyframes ripple { to { transform: scale(4); opacity: 0; } }
 
     @media (max-width: 640px) {
       .header-actions { position: static; justify-content: center; margin-top: 10px; }
       .logo { font-size: 32px; }
+      .message-content-wrapper { max-width: 86%; }
+      .avatar { width: 28px; height: 28px; font-size: 13px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
     }
   </style>
 </head>
 <body>
+  <canvas id="scene"></canvas>
+
   <div class="header">
     <h1 class="logo">MAX AI</h1>
     <p class="subtitle">Your AI assistant</p>
@@ -254,7 +343,7 @@
   </div>
 
   <div class="chat-container">
-    <div class="messages" id="chat-messages"></div>
+    <div class="messages" id="chat-messages" aria-live="polite"></div>
 
     <div class="input-area">
       <textarea id="messageInput" rows="1" placeholder="Ask Max anything…"></textarea>
@@ -263,12 +352,17 @@
     </div>
   </div>
 
+  <script>window.MAX_SCENE_MODE = "ambient";</script>
+  {% include "_scene.html" %}
+
   <script>
     const messagesEl = document.getElementById("chat-messages");
     const input = document.getElementById("messageInput");
     const sendBtn = document.getElementById("sendBtn");
     const micBtn = document.getElementById("micBtn");
     const badge = document.getElementById("modelBadge");
+    const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const fx = (fn) => window.MaxScene && fn(window.MaxScene);
 
     // Which model is answering?
     fetch("/model_info")
@@ -285,6 +379,28 @@
 
     document.getElementById("logoutBtn").addEventListener("click", () => {
       window.location.href = "/logout";
+    });
+
+    // Ripple on every button press
+    document.querySelectorAll(".header-actions button, #sendBtn, #micBtn").forEach(btn => {
+      btn.addEventListener("pointerdown", (e) => {
+        if (btn.disabled) return;
+        const r = btn.getBoundingClientRect(), size = Math.max(r.width, r.height);
+        const rip = document.createElement("span");
+        rip.className = "ripple";
+        Object.assign(rip.style, {
+          width: size + "px", height: size + "px",
+          left: (e.clientX - r.left - size / 2) + "px", top: (e.clientY - r.top - size / 2) + "px"
+        });
+        btn.appendChild(rip);
+        rip.addEventListener("animationend", () => rip.remove());
+      });
+    });
+
+    // Grow the text box with its content
+    input.addEventListener("input", () => {
+      input.style.height = "auto";
+      input.style.height = Math.min(input.scrollHeight, 140) + "px";
     });
 
     // Speech recognition (if the browser supports it)
@@ -306,6 +422,7 @@
       recognition.onend = recognition.onerror = () => {
         micActive = false;
         micBtn.textContent = "🎤";
+        micBtn.classList.remove("live");
       };
     } else {
       micBtn.disabled = true;
@@ -318,6 +435,7 @@
         recognition.stop();
       } else {
         micBtn.textContent = "🛑";
+        micBtn.classList.add("live");
         recognition.start();
         micActive = true;
       }
@@ -327,6 +445,12 @@
     function createMessageEl(content, isUser = false) {
       const msg = document.createElement("div");
       msg.className = `message ${isUser ? "user" : "ai"}`;
+      if (!isUser) {
+        const avatar = document.createElement("div");
+        avatar.className = "avatar";
+        avatar.innerHTML = "<span>M</span>";
+        msg.appendChild(avatar);
+      }
       const wrapper = document.createElement("div");
       wrapper.className = "message-content-wrapper";
 
@@ -369,27 +493,98 @@
       navigator.clipboard.writeText(code)
         .then(() => {
           btn.textContent = "✅ Copied!";
+          const r = btn.getBoundingClientRect();
+          fx(s => s.burst(r.left + r.width / 2, r.top + r.height / 2, "blue", 18));
           setTimeout(() => { btn.textContent = "📋 Copy"; }, 2000);
         })
         .catch(() => { btn.textContent = "❌ Error"; });
     }
 
+    function nearBottom() {
+      return messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 120;
+    }
+
+    function scrollDown(smooth = true) {
+      messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: smooth && !REDUCED ? "smooth" : "auto" });
+    }
+
     function addMessage(content, isUser = false) {
       const el = createMessageEl(content, isUser);
       messagesEl.appendChild(el);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
+      scrollDown();
       return el;
+    }
+
+    // Type an answer out on screen, as if it is being written live.
+    function typeOut(el) {
+      const wrapper = el.querySelector(".message-content-wrapper");
+      const walker = document.createTreeWalker(wrapper, NodeFilter.SHOW_TEXT, {
+        acceptNode: n => n.parentElement.closest(".code-header") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
+      });
+      const nodes = [];
+      let total = 0;
+      while (walker.nextNode()) {
+        const n = walker.currentNode;
+        nodes.push({ n, full: n.textContent });
+        total += n.textContent.length;
+      }
+      if (REDUCED || !total) return Promise.resolve();
+      nodes.forEach(o => { o.n.textContent = ""; });
+      const caret = document.createElement("span");
+      caret.className = "caret";
+      const cps = Math.min(420, Math.max(55, total / 1.8));   // characters per second
+      let shown = 0, last = performance.now();
+      return new Promise(resolve => {
+        function step(now) {
+          shown += cps * Math.min(0.05, (now - last) / 1000);
+          last = now;
+          const follow = nearBottom();
+          let budget = Math.floor(shown), idx = 0;
+          for (let i = 0; i < nodes.length; i++) {
+            const take = Math.min(nodes[i].full.length, budget);
+            if (nodes[i].n.textContent.length !== take) nodes[i].n.textContent = nodes[i].full.slice(0, take);
+            budget -= take;
+            idx = i;
+            if (take < nodes[i].full.length) break;
+          }
+          const cur = nodes[idx].n;
+          if (caret.previousSibling !== cur) cur.parentNode.insertBefore(caret, cur.nextSibling);
+          if (follow) messagesEl.scrollTop = messagesEl.scrollHeight;
+          if (shown < total) {
+            requestAnimationFrame(step);
+          } else {
+            nodes.forEach(o => { o.n.textContent = o.full; });
+            caret.remove();
+            resolve();
+          }
+        }
+        requestAnimationFrame(step);
+      });
+    }
+
+    function showTyping() {
+      const msg = document.createElement("div");
+      msg.className = "message ai typing";
+      msg.innerHTML = '<div class="avatar"><span>M</span></div>' +
+        '<div class="message-content-wrapper"><span class="dot"></span><span class="dot"></span><span class="dot"></span>' +
+        '<span class="sr-only">Max is thinking…</span></div>';
+      messagesEl.appendChild(msg);
+      scrollDown();
+      return msg;
     }
 
     async function sendMessage() {
       const value = input.value.trim();
       if (!value || sendBtn.disabled) return;
 
+      const r = sendBtn.getBoundingClientRect();
+      fx(s => s.burst(r.left + r.width / 2, r.top + r.height / 2, "purple", 40));
       addMessage(value, true);
       input.value = "";
+      input.style.height = "auto";
       sendBtn.disabled = true;
-      const thinking = addMessage("Max is thinking…");
-      thinking.classList.add("thinking");
+      sendBtn.classList.add("busy");
+      const thinking = showTyping();
 
       try {
         const res = await fetch("/chat", {
@@ -403,12 +598,20 @@
         }
         const data = await res.json();
         thinking.remove();
-        addMessage(data.reply || data.error || "No reply.");
+        const el = addMessage(data.reply || data.error || "No reply.");
+        el.classList.add("new");
+        fx(s => {
+          s.excite(1.4);
+          const b = el.getBoundingClientRect();
+          s.burst(b.left + 24, b.bottom - 16, "orange", 28);
+        });
+        await typeOut(el);
       } catch (err) {
         thinking.remove();
         addMessage("❌ Error: " + err.message);
       } finally {
         sendBtn.disabled = false;
+        sendBtn.classList.remove("busy");
         input.focus();
       }
     }
@@ -421,14 +624,28 @@
       }
     });
 
+    // Fade the visible messages out before emptying the list
+    function clearMessages() {
+      const items = [...messagesEl.children];
+      if (REDUCED || !items.length) { messagesEl.innerHTML = ""; return Promise.resolve(); }
+      const shown = items.slice(-12);
+      shown.forEach((m, i) => { m.style.animationDelay = (i * 25) + "ms"; m.classList.add("leaving"); });
+      return new Promise(resolve => setTimeout(() => { messagesEl.innerHTML = ""; resolve(); }, 380 + shown.length * 25));
+    }
+
     document.getElementById("historyBtn").addEventListener("click", async () => {
       try {
         const resp = await fetch("/restore_history");
         const data = await resp.json();
         if (!resp.ok) throw new Error(data.error || resp.status);
-        messagesEl.innerHTML = "";
+        await clearMessages();
         if (!data.history.length) addMessage("No saved messages yet.");
-        data.history.forEach(m => addMessage(m.content, m.role === "user"));
+        data.history.forEach((m, i) => {
+          const el = createMessageEl(m.content, m.role === "user");
+          el.style.animationDelay = Math.max(0, i - data.history.length + 20) * 40 + "ms";
+          messagesEl.appendChild(el);
+        });
+        scrollDown(false);
       } catch (err) {
         addMessage("❌ Could not load history: " + err.message);
       }
@@ -437,10 +654,12 @@
     document.getElementById("clearBtn").addEventListener("click", async () => {
       if (!confirm("Delete your whole chat history?")) return;
       await fetch("/clear_history", { method: "POST" });
-      messagesEl.innerHTML = "";
+      await clearMessages();
+      const r = messagesEl.getBoundingClientRect();
+      fx(s => s.burst(r.left + r.width / 2, r.top + r.height / 2, "pink", 50));
     });
 
-    addMessage("Hi! I'm Max, your AI assistant. Ask me anything.");
+    setTimeout(() => typeOut(addMessage("Hi! I'm Max, your AI assistant. Ask me anything.")), 450);
   </script>
 </body>
 </html>
