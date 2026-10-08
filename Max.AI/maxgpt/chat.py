@@ -4,11 +4,12 @@
     python -m maxgpt.chat --temp 0.5      # more focused answers
 """
 import argparse
+import json
 import os
 import threading
 
 from . import calc
-from .data import SYSTEM_PROMPT, default_files, format_prompt
+from .data import LEGACY_SYSTEM_PROMPT, SYSTEM_PROMPT, default_files, format_prompt
 from .guard import KnowledgeGuard
 from .model import GPT
 from .tokenizer import Tokenizer
@@ -34,6 +35,11 @@ class MaxGPTEngine:
                 f"No trained MaxGPT model in {checkpoint_dir}. Train one first:  python -m maxgpt.train")
         self.model = GPT.load(model_path)
         self.tok = Tokenizer.load(tok_path)
+        meta_path = os.path.join(checkpoint_dir, "meta.json")
+        self.meta = json.load(open(meta_path)) if os.path.exists(meta_path) else {}
+        # models trained on the big corpus can answer from search results (see maxgpt/think.py)
+        self.grounded = bool(self.meta.get("grounded"))
+        self.system = SYSTEM_PROMPT if self.grounded else LEGACY_SYSTEM_PROMPT
         self.end_id = self.tok.special["<|end|>"]
         self.settings = dict(temperature=temperature, top_k=top_k, top_p=top_p, max_new_tokens=max_new_tokens)
         self._lock = threading.Lock()
@@ -51,9 +57,10 @@ class MaxGPTEngine:
                 return ids[-budget:]
             turns = turns[2:] if len(turns) > 2 else turns[1:]
 
-    def stream(self, history, system=SYSTEM_PROMPT, **overrides):
+    def stream(self, history, system=None, **overrides):
         """history: list of (role, text), role 'user' or 'assistant'. Yields text pieces."""
         opts = {**self.settings, **overrides}
+        system = system or self.system
         asked = [text for role, text in history if role == "user"]
         question = asked[-1] if asked else ""
         previous = asked[-2] if len(asked) > 1 else None
@@ -61,7 +68,7 @@ class MaxGPTEngine:
         if result:  # exact arithmetic instead of a guess
             yield result
             return
-        if self.guard:
+        if self.guard and opts.get("guard", True):
             # Earlier questions, the most recent counted twice, to carry the topic of the chat over.
             context = " ".join(asked[-3:-2] + asked[-2:-1] * 2) or None
             prompt_turns = self.guard.match(question, previous, context)
@@ -87,7 +94,7 @@ class MaxGPTEngine:
             if pending:
                 yield self.tok.decode(pending)
 
-    def reply(self, history, system=SYSTEM_PROMPT, **overrides):
+    def reply(self, history, system=None, **overrides):
         return "".join(self.stream(history, system, **overrides)).strip()
 
 

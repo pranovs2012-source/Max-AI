@@ -2,3 +2,4 @@ Max.AI/maxgpt/data/unanswered.txt
 Max.AI/maxgpt/checkpoints/optimizer.npz
 Max.AI/tests
 **/__pycache__
+Max.AI/maxgpt/checkpoints/train_state.pt

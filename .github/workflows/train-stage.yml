@@ -1,0 +1,71 @@
+name: Train MaxGPT stage
+
+# One training stage (GitHub jobs can run for at most 6 hours). Called by train-maxgpt.yml.
+on:
+  workflow_call:
+    inputs:
+      stage: {type: number, required: true}
+      minutes: {type: number, required: true}
+      total_minutes: {type: number, required: true}
+      preset: {type: string, default: large}
+      resume: {type: boolean, default: true}
+
+permissions:
+  contents: write
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install NumPy and PyTorch (CPU)
+        run: |
+          pip install numpy
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - uses: actions/download-artifact@v4
+        with:
+          name: corpus
+          path: corpus
+      - uses: actions/download-artifact@v4
+        if: inputs.resume
+        with:
+          name: checkpoint-${{ inputs.stage - 1 }}
+          path: ckpt
+      - name: Train for ${{ inputs.minutes }} minutes
+        working-directory: Max.AI
+        run: |
+          python -m maxgpt.train_torch --corpus ../corpus --out ../ckpt --preset ${{ inputs.preset }} \
+            --minutes ${{ inputs.minutes }} --total-minutes ${{ inputs.total_minutes }} \
+            ${{ inputs.resume && '--resume' || '' }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: checkpoint-${{ inputs.stage }}
+          path: ckpt
+          retention-days: 7
+      - name: Grade the new model
+        working-directory: Max.AI
+        run: |
+          python -m maxgpt.knowledge
+          python tools/model_eval.py ../ckpt
+      - name: Install it if it beats the current model
+        run: |
+          # compare with the model on main right now (an earlier stage may have installed one)
+          git fetch -q origin "${GITHUB_REF_NAME}"
+          git checkout -q -B publish "origin/${GITHUB_REF_NAME}"
+          new=$(python -c "import json;print(json.load(open('ckpt/eval.json'))['score'])")
+          old=$(python -c "import json,os;p='Max.AI/maxgpt/checkpoints/eval.json';print(json.load(open(p))['score'] if os.path.exists(p) else 0)")
+          echo "new score $new, current score $old"
+          if python -c "import sys;sys.exit(0 if $new > $old else 1)"; then
+            cp ckpt/maxgpt.npz ckpt/tokenizer.json ckpt/meta.json ckpt/eval.json Max.AI/maxgpt/checkpoints/
+            git config user.name "maxgpt-trainer[bot]"
+            git config user.email "maxgpt-trainer@users.noreply.github.com"
+            git add Max.AI/maxgpt/checkpoints
+            git commit -q -m "MaxGPT stage ${{ inputs.stage }}: score $new (was $old) [skip ci]"
+            git push origin "HEAD:${GITHUB_REF_NAME}" || { git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}"; }
+          else
+            echo "Keeping the current model."
+          fi

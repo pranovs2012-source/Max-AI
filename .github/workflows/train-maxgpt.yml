@@ -1,89 +1,80 @@
 name: Train MaxGPT
 
-# Trains Max AI's own language model on GitHub's machines and commits the
-# trained weights (Max.AI/maxgpt/checkpoints/) back to the repository.
-# Runs automatically when the model code or training data changes, or by hand:
-# Actions tab -> "Train MaxGPT" -> Run workflow.
+# Trains Max AI's own language model on GitHub's machines, in up to three chained stages:
+# builds the corpus (Dolly + SQuAD + Max's conversations), trains with PyTorch, grades each
+# stage with tools/model_eval.py and commits the weights whenever they beat the current model.
+# Run it from the Actions tab -> "Train MaxGPT" -> Run workflow.
 on:
-  push:
-    branches: [main]
-    paths:  # only what changes the trained model (not chat.py / guard.py)
-      - "Max.AI/maxgpt/autograd.py"
-      - "Max.AI/maxgpt/data.py"
-      - "Max.AI/maxgpt/model.py"
-      - "Max.AI/maxgpt/optim.py"
-      - "Max.AI/maxgpt/tokenizer.py"
-      - "Max.AI/maxgpt/train.py"
-      - "Max.AI/maxgpt/knowledge.py"
-      - "Max.AI/maxgpt/data/chat/**"
-      - "Max.AI/maxgpt/data/text/**"
   workflow_dispatch:
     inputs:
       preset:
-        description: "Model size: tiny, small, base or large"
-        default: "base"
-      steps:
-        description: "Training steps"
-        default: "8000"
+        description: "Model size: base, large or xl"
+        default: "large"
+      stage1_minutes:
+        description: "Minutes of training in stage 1"
+        default: "150"
+      stage2_minutes:
+        description: "Minutes in stage 2 (0 = stop after stage 1)"
+        default: "170"
+      stage3_minutes:
+        description: "Minutes in stage 3 (0 = stop after stage 2)"
+        default: "170"
+
+concurrency:
+  group: train-maxgpt
+  cancel-in-progress: false
 
 permissions:
   contents: write
 
-concurrency:
-  group: train-maxgpt
-  cancel-in-progress: true
-
 jobs:
-  train:
+  corpus:
     runs-on: ubuntu-latest
-    timeout-minutes: 345
-    defaults:
-      run:
-        working-directory: Max.AI
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
-      - name: Install NumPy (MaxGPT's only dependency)
-        run: pip install numpy
-
-      - name: Generate world-knowledge conversations
-        run: python -m maxgpt.knowledge
-
-      - name: Run tests
-        run: python -m unittest discover -s tests -v
-
-      - name: Train
+      - run: pip install numpy
+      - name: Build the corpus
+        working-directory: Max.AI
         run: |
-          python -m maxgpt.train \
-            --preset "${{ github.event.inputs.preset || 'base' }}" \
-            --steps "${{ github.event.inputs.steps || '8000' }}" \
-            --batch 16 --eval-every 500
+          python -m maxgpt.knowledge
+          python -m maxgpt.corpus --out ../corpus
+          rm -rf ../corpus/downloads
+      - uses: actions/upload-artifact@v4
+        with:
+          name: corpus
+          path: corpus
+          retention-days: 7
 
-      - name: Quick answer check
-        run: |
-          python - <<'EOF'
-          from maxgpt.chat import MaxGPTEngine
-          engine = MaxGPTEngine(temperature=0)
-          for q in ["Who are you?", "Who is Pranov?", "What is the capital of Japan?",
-                    "What is photosynthesis?", "What is a list in Python?", "How do I center a div?"]:
-              print(f"Q: {q}\nA: {engine.reply([('user', q)])}\n")
-          EOF
+  stage1:
+    needs: corpus
+    uses: ./.github/workflows/train-stage.yml
+    with:
+      stage: 1
+      resume: false
+      preset: ${{ inputs.preset }}
+      minutes: ${{ fromJSON(inputs.stage1_minutes) }}
+      total_minutes: ${{ fromJSON(inputs.stage1_minutes) + fromJSON(inputs.stage2_minutes) + fromJSON(inputs.stage3_minutes) }}
 
-      - name: Commit trained weights
-        working-directory: .
-        run: |
-          git config user.name "maxgpt-trainer[bot]"
-          git config user.email "maxgpt-trainer@users.noreply.github.com"
-          git add -f Max.AI/maxgpt/checkpoints/maxgpt.npz Max.AI/maxgpt/checkpoints/tokenizer.json \
-            Max.AI/maxgpt/data/chat/20_world_facts.txt
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "Update trained MaxGPT weights and world-knowledge data [skip ci]"
-            git pull --rebase origin "${GITHUB_REF_NAME}"
-            git push origin "HEAD:${GITHUB_REF_NAME}"
-          fi
+  stage2:
+    needs: stage1
+    if: inputs.stage2_minutes != '0'
+    uses: ./.github/workflows/train-stage.yml
+    with:
+      stage: 2
+      preset: ${{ inputs.preset }}
+      minutes: ${{ fromJSON(inputs.stage2_minutes) }}
+      total_minutes: ${{ fromJSON(inputs.stage1_minutes) + fromJSON(inputs.stage2_minutes) + fromJSON(inputs.stage3_minutes) }}
+
+  stage3:
+    needs: stage2
+    if: inputs.stage3_minutes != '0'
+    uses: ./.github/workflows/train-stage.yml
+    with:
+      stage: 3
+      preset: ${{ inputs.preset }}
+      minutes: ${{ fromJSON(inputs.stage3_minutes) }}
+      total_minutes: ${{ fromJSON(inputs.stage1_minutes) + fromJSON(inputs.stage2_minutes) + fromJSON(inputs.stage3_minutes) }}

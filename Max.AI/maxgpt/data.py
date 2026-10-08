@@ -19,7 +19,22 @@ import os
 
 import numpy as np
 
-SYSTEM_PROMPT = "You are Max AI, a friendly coding assistant made by Pranov. Give brief, correct answers and code when useful."
+SYSTEM_PROMPT = ("You are Max AI, a friendly assistant made by Pranov. Answer in clear, complete sentences, "
+                 "give code when useful, and only state facts you are sure about.")
+
+# The prompt models trained before the big corpus (no meta.json "grounded" flag) were trained with.
+LEGACY_SYSTEM_PROMPT = ("You are Max AI, a friendly coding assistant made by Pranov. "
+                        "Give brief, correct answers and code when useful.")
+
+NO_ANSWER = "I couldn't find the answer to that in the search results."
+
+
+def grounded_question(question, passages):
+    """The user turn for answering from search results (used in training and in the app)."""
+    lines = ["Answer using these search results."]
+    lines += [f"[{i}] {text.strip()}" for i, text in enumerate(passages, 1)]
+    lines += ["", f"Question: {question.strip()}"]
+    return "\n".join(lines)
 
 
 def parse_conversations(text):

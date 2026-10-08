@@ -3,9 +3,10 @@
 Any UTF-8 text can be encoded (unknown characters fall back to raw bytes),
 so the model never sees an "unknown token".
 """
+import heapq
 import json
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 
 # Splits text into word-ish chunks before merging (similar in spirit to GPT-2).
 PATTERN = re.compile(r"'s|'t|'re|'ve|'m|'ll|'d| ?[A-Za-z]+| ?\d{1,3}| ?[^\sA-Za-z\d]+|\s+(?!\S)|\s+")
@@ -39,29 +40,55 @@ class Tokenizer:
 
     @classmethod
     def train(cls, text, vocab_size=2048, verbose=False):
-        """Learn merges until the vocabulary reaches `vocab_size`."""
+        """Learn merges until the vocabulary reaches `vocab_size`.
+
+        Incremental: after each merge only the words containing that pair are updated, and a
+        heap finds the most frequent pair, so even very large corpora train in seconds.
+        """
         n_merges = max(0, vocab_size - 256 - len(SPECIAL_TOKENS))
-        words = Counter(PATTERN.findall(text))
-        seqs = {w: list(w.encode("utf-8")) for w in words}
+        words = Counter(PATTERN.findall(text) if isinstance(text, str) else text)
+        seqs = [list(w.encode("utf-8")) for w in words]
+        freqs = list(words.values())
+        counts, where = defaultdict(int), defaultdict(set)
+        for i, ids in enumerate(seqs):
+            for pair in zip(ids, ids[1:]):
+                counts[pair] += freqs[i]
+                where[pair].add(i)
+        heap = [(-c, pair) for pair, c in counts.items()]
+        heapq.heapify(heap)
         tok = cls()
         for step in range(n_merges):
-            pairs = Counter()
-            for w, ids in seqs.items():
-                f = words[w]
-                for pair in zip(ids, ids[1:]):
-                    pairs[pair] += f
-            if not pairs:
-                break
-            best, count = pairs.most_common(1)[0]
-            if count < 2:
+            best = None
+            while heap:
+                neg, pair = heapq.heappop(heap)
+                if counts.get(pair, 0) == -neg:
+                    best = pair
+                    break
+            if best is None or counts[best] < 2:
                 break
             tok._add_merge(*best)
             new_id = tok.merges[best]
-            for w, ids in seqs.items():
-                if len(ids) > 1:
-                    seqs[w] = _merge(ids, best, new_id)
-            if verbose and (step + 1) % 250 == 0:
-                print(f"  tokenizer: {step + 1}/{n_merges} merges")
+            touched = set()
+            for i in where.pop(best, ()):
+                old = seqs[i]
+                merged = _merge(old, best, new_id)
+                if len(merged) == len(old):
+                    continue
+                f = freqs[i]
+                for pair in zip(old, old[1:]):
+                    counts[pair] -= f
+                    touched.add(pair)
+                for pair in zip(merged, merged[1:]):
+                    counts[pair] += f
+                    where[pair].add(i)
+                    touched.add(pair)
+                seqs[i] = merged
+            counts.pop(best, None)
+            for pair in touched:
+                if counts.get(pair, 0) > 0:
+                    heapq.heappush(heap, (-counts[pair], pair))
+            if verbose and (step + 1) % 1000 == 0:
+                print(f"  tokenizer: {step + 1}/{n_merges} merges", flush=True)
         tok._init_special()
         return tok
 
