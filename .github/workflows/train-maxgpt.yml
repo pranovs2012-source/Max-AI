@@ -31,7 +31,11 @@ jobs:
   corpus:
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    outputs:
+      total: ${{ steps.plan.outputs.total }}
     steps:
+      - id: plan
+        run: echo "total=$(( ${{ inputs.stage1_minutes }} + ${{ inputs.stage2_minutes }} + ${{ inputs.stage3_minutes }} ))" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
@@ -57,24 +61,24 @@ jobs:
       resume: false
       preset: ${{ inputs.preset }}
       minutes: ${{ fromJSON(inputs.stage1_minutes) }}
-      total_minutes: ${{ fromJSON(inputs.stage1_minutes) + fromJSON(inputs.stage2_minutes) + fromJSON(inputs.stage3_minutes) }}
+      total_minutes: ${{ fromJSON(needs.corpus.outputs.total) }}
 
   stage2:
-    needs: stage1
+    needs: [corpus, stage1]
     if: inputs.stage2_minutes != '0'
     uses: ./.github/workflows/train-stage.yml
     with:
       stage: 2
       preset: ${{ inputs.preset }}
       minutes: ${{ fromJSON(inputs.stage2_minutes) }}
-      total_minutes: ${{ fromJSON(inputs.stage1_minutes) + fromJSON(inputs.stage2_minutes) + fromJSON(inputs.stage3_minutes) }}
+      total_minutes: ${{ fromJSON(needs.corpus.outputs.total) }}
 
   stage3:
-    needs: stage2
+    needs: [corpus, stage2]
     if: inputs.stage3_minutes != '0'
     uses: ./.github/workflows/train-stage.yml
     with:
       stage: 3
       preset: ${{ inputs.preset }}
       minutes: ${{ fromJSON(inputs.stage3_minutes) }}
-      total_minutes: ${{ fromJSON(inputs.stage1_minutes) + fromJSON(inputs.stage2_minutes) + fromJSON(inputs.stage3_minutes) }}
+      total_minutes: ${{ fromJSON(needs.corpus.outputs.total) }}
