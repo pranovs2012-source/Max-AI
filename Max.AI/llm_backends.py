@@ -26,8 +26,12 @@ class MaxGPTBackend:
         from maxgpt.chat import DEFAULT_DIR, MaxGPTEngine
         self.engine = MaxGPTEngine(os.environ.get("MAXGPT_CHECKPOINT", DEFAULT_DIR),
                                    temperature=float(os.environ.get("MAXGPT_TEMPERATURE", "0.6")))
+        # optional second model that writes answers from web results (maxgpt/checkpoints_reader)
+        reader_dir = os.path.join(os.path.dirname(DEFAULT_DIR), "checkpoints_reader")
+        self.reader = MaxGPTEngine(reader_dir, temperature=0.3, guard=False) \
+            if os.path.exists(os.path.join(reader_dir, "maxgpt.npz")) else None
         from maxgpt.think import Assistant
-        self.assistant = Assistant(self.engine, use_web=os.environ.get("MAX_AI_WEB", "1") != "0")
+        self.assistant = Assistant(self.engine, use_web=os.environ.get("MAX_AI_WEB", "1") != "0", reader=self.reader)
 
     def answer(self, history):
         return self.assistant.answer(history)

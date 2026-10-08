@@ -82,8 +82,10 @@ def main():
         results.append(ok)
         print(f"[{'PASS' if ok else 'fail'}] no-answer {q!r} -> {a!r}")
     score = sum(results) / len(results)
-    print(f"SCORE {score:.2f} ({sum(results)}/{len(results)})")
-    json.dump({"score": score, "passed": sum(results), "total": len(results)},
+    chat = sum(results[:len(CHAT)]) / len(CHAT)
+    reading = sum(results[len(CHAT):]) / (len(results) - len(CHAT))
+    print(f"SCORE {score:.2f} ({sum(results)}/{len(results)}) · chat {chat:.2f} · reading {reading:.2f}")
+    json.dump({"score": score, "chat": chat, "reading": reading, "passed": sum(results), "total": len(results)},
               open(os.path.join(ckpt, "eval.json"), "w"))
 
 

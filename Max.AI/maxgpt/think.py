@@ -115,9 +115,12 @@ class Thinking:
 
 
 class Assistant:
-    def __init__(self, engine=None, use_web=True):
-        self.engine = engine      # MaxGPTEngine (may be None in tests)
+    def __init__(self, engine=None, use_web=True, reader=None):
+        self.engine = engine      # MaxGPTEngine for conversation (may be None in tests)
         self.use_web = use_web
+        # the model that writes answers from search results: a separate "reader" model if one is
+        # installed, otherwise the main model when it was trained for it
+        self.reader = reader or (engine if getattr(engine, "grounded", False) else None)
 
     # ── entry point ──────────────────────────────────────────────────────────
     def answer(self, history):
@@ -506,7 +509,7 @@ class Assistant:
     def write_answer(self, q, sentences, title, th):
         """Max writes the answer from the facts it found; a check keeps it faithful to them."""
         facts = [s for s, _ in sentences]
-        if self.engine is not None and getattr(self.engine, "grounded", False):
+        if self.reader is not None:
             passages, size = [], 0
             for f in facts:
                 if size + len(f) > 900:
@@ -515,14 +518,24 @@ class Assistant:
                 size += len(f)
             prompt = grounded_question(q, passages)
             for temp in (0.0, 0.3):
-                answer = self.engine.reply([("user", prompt)], guard=False, temperature=temp, max_new_tokens=120)
+                answer = self.reader.reply([("user", prompt)], guard=False, temperature=temp, max_new_tokens=120)
                 problem = self.unsupported(answer, " ".join(passages))
+                if not problem and self.copied(answer, passages):
+                    th.step("Writing the answer", "My draft only repeated one source sentence; using the fuller summary")
+                    break
                 if not problem:
                     th.step("Writing the answer in my own words", "Every fact checked against the sources ✓")
                     return answer
                 th.step("Double-checking my wording", problem)
         th.step("Writing the answer", "Built from the sources' own sentences")
         return self.compose(facts, title)
+
+    @staticmethod
+    def copied(answer, passages):
+        """True when a draft is just one of the source sentences repeated word for word."""
+        norm = lambda t: re.sub(r"[^a-z0-9]+", " ", t.lower()).strip()
+        a = norm(answer)
+        return any(a and a in norm(p) for p in passages)
 
     @staticmethod
     def unsupported(answer, context):

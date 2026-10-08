@@ -120,6 +120,11 @@ class AssistantTest(unittest.TestCase):
         self.assertIsNotNone(Assistant.unsupported("The tower is painted bright purple daily.", ctx))  # made up
         self.assertIsNotNone(Assistant.unsupported("I couldn't find the answer to that.", ctx))
 
+    def test_copied_drafts_are_detected(self):
+        passages = ["The tower is 330 metres tall, about the same height as an 81-storey building."]
+        self.assertTrue(Assistant.copied("The tower is 330 metres tall, about the same height as an 81-storey building.", passages))
+        self.assertFalse(Assistant.copied("The Eiffel Tower is 330 metres tall.", passages))
+
     def test_self_check(self):
         self.assertIsNotNone(Assistant.quality_problem("Pranov. Pranov. Pranov. Pranov."))
         self.assertIsNotNone(Assistant.quality_problem("```python\nprint(1)"))

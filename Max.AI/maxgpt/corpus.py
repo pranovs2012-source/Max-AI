@@ -152,7 +152,7 @@ def dolly_examples(path):
     return out
 
 
-def max_examples(rng, repeat=4, augment=2):
+def max_examples(rng, repeat=8, augment=2):
     out = []
     chat_files, _ = default_files(os.path.join(HERE, "data"))
     for path in chat_files:
