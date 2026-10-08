@@ -1,0 +1,86 @@
+{% raw %}
+<style>
+/* Shared effects for the login and register cards. */
+@property --spin { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+.form-wrapper { perspective: 1000px; }
+.card {
+  position: relative;
+  transform-style: preserve-3d;
+  will-change: transform;
+  animation: cardIn 1s cubic-bezier(.16, 1.3, .3, 1) both;
+}
+.card::before {                       /* slowly rotating neon border */
+  content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; pointer-events: none;
+  background: conic-gradient(from var(--spin), transparent 0 55%, #cc44ff 70%, #ff6a00 80%, #00ccff 90%, transparent 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  animation: spin 6s linear infinite;
+}
+.card::after {                        /* light that follows the cursor */
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 0%), rgba(204,102,255,.14), transparent 45%);
+}
+@keyframes spin { to { --spin: 360deg; } }
+@keyframes cardIn {
+  0% { opacity: 0; transform: translateY(40px) scale(.92) rotateX(14deg); filter: blur(8px); }
+  60% { opacity: 1; filter: blur(0); }
+  100% { opacity: 1; transform: none; }
+}
+.brand h1 { background-size: 220% auto !important; animation: brandShine 5s ease-in-out infinite, brandIn .9s cubic-bezier(.16,1.3,.3,1) both; }
+@keyframes brandShine { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+@keyframes brandIn { from { opacity: 0; letter-spacing: 18px; filter: blur(6px); } to { opacity: 1; filter: blur(0); } }
+.brand p { animation: fadeRise .9s .25s ease both; }
+.card .field, .card form > button, .card .divider, .card .btn-google, .card .footer-link, .card h2 {
+  animation: fadeRise .7s cubic-bezier(.2,1,.3,1) both;
+}
+.card h2 { animation-delay: .15s; }
+.card .field:nth-of-type(1) { animation-delay: .22s; }
+.card .field:nth-of-type(2) { animation-delay: .29s; }
+.card .field:nth-of-type(3) { animation-delay: .36s; }
+.card form > button { animation-delay: .42s; }
+.card .divider, .card .btn-google { animation-delay: .5s; }
+.card .footer-link { animation-delay: .58s; }
+@keyframes fadeRise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.field input:focus { box-shadow: 0 0 0 3px rgba(180,80,255,.15), 0 0 24px rgba(180,80,255,.25) !important; }
+.btn-login, .btn-register { transition: transform .15s, box-shadow .3s, filter .3s !important; }
+.btn-login:hover, .btn-register:hover { opacity: 1 !important; filter: brightness(1.15); box-shadow: 0 8px 30px rgba(170,60,255,.45), 0 0 50px rgba(255,100,0,.2); transform: translateY(-1px); }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}
+</style>
+<script>
+(function () {
+  const card = document.querySelector(".card");
+  if (!card || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  // 3D tilt toward the cursor, smoothed every frame.
+  let tx = 0, ty = 0, x = 0, y = 0, raf = 0;
+  function tick() {
+    x += (tx - x) * 0.12; y += (ty - y) * 0.12;
+    card.style.transform = `rotateY(${x * 7}deg) rotateX(${-y * 7}deg) translateZ(0)`;
+    raf = Math.abs(tx - x) + Math.abs(ty - y) > 0.001 ? requestAnimationFrame(tick) : 0;
+  }
+  card.addEventListener("animationend", (e) => {
+    if (e.animationName !== "cardIn") return;
+    card.style.animation = "none";
+    window.addEventListener("pointermove", (ev) => {
+      const r = card.getBoundingClientRect();
+      tx = Math.max(-1, Math.min(1, (ev.clientX - (r.left + r.width / 2)) / (window.innerWidth / 2)));
+      ty = Math.max(-1, Math.min(1, (ev.clientY - (r.top + r.height / 2)) / (window.innerHeight / 2)));
+      card.style.setProperty("--mx", ((ev.clientX - r.left) / r.width) * 100 + "%");
+      card.style.setProperty("--my", ((ev.clientY - r.top) / r.height) * 100 + "%");
+      if (!raf) raf = requestAnimationFrame(tick);
+    }, { passive: true });
+  });
+  // Sparks when a button is pressed.
+  document.querySelectorAll(".card button").forEach((btn) => {
+    btn.addEventListener("pointerdown", (e) => window.MaxScene && MaxScene.burst(e.clientX, e.clientY, "pink", 30));
+  });
+  document.querySelectorAll(".field input").forEach((inp) => {
+    inp.addEventListener("focus", () => {
+      const r = inp.getBoundingClientRect();
+      window.MaxScene && MaxScene.burst(r.left + 14, r.top + r.height / 2, "purple", 10);
+    });
+  });
+})();
+</script>
+{% endraw %}

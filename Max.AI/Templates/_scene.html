@@ -1,0 +1,606 @@
+{% raw %}
+<script>
+/* Max AI animated scene: night sky, aurora, a flying dragon, fire and particles.
+ *
+ * Shared by the login, register and chat pages. Set window.MAX_SCENE_MODE = "ambient"
+ * before including it for a calmer background behind the chat.
+ *
+ * Built for a high, steady frame rate:
+ *  - every movement is scaled by the real frame time, so it looks the same at 60, 120 or 144 Hz
+ *  - glows are pre-rendered sprites drawn with additive blending (no per-frame shadowBlur)
+ *  - the static sky is drawn once to an offscreen canvas
+ *  - the canvas is sharp on high-DPI screens and lowers its own resolution if a device struggles
+ */
+(function () {
+  "use strict";
+  const AMBIENT = window.MAX_SCENE_MODE === "ambient";
+  const REDUCED = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const TAU = Math.PI * 2;
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const pick = (list) => list[(Math.random() * list.length) | 0];
+
+  const canvas = document.getElementById("scene") || document.body.appendChild(document.createElement("canvas"));
+  canvas.id = "scene";
+  canvas.setAttribute("aria-hidden", "true");
+  Object.assign(canvas.style, { position: "fixed", inset: "0", zIndex: "0", pointerEvents: "none" });
+  const ctx = canvas.getContext("2d", { alpha: false });
+
+  let W = 0, H = 0, DPR = 1, sc = 1;
+  // Start a little lower on high-DPI screens of small devices; the loop adjusts from there.
+  let quality = (window.devicePixelRatio || 1) >= 2 && (navigator.hardwareConcurrency || 8) <= 4 ? 0.7 : 1;
+
+  // ── Sprites ────────────────────────────────────────────────────────────────
+  function makeCanvas(w, h) {
+    const c = document.createElement("canvas");
+    c.width = Math.ceil(w); c.height = Math.ceil(h);
+    return c;
+  }
+  function glow(color, core = "rgba(255,255,255,0.95)", size = 64) {
+    const c = makeCanvas(size, size), x = c.getContext("2d"), r = size / 2;
+    const g = x.createRadialGradient(r, r, 0, r, r, r);
+    g.addColorStop(0, core);
+    g.addColorStop(0.18, color + "0.9)");
+    g.addColorStop(0.45, color + "0.32)");
+    g.addColorStop(1, color + "0)");
+    x.fillStyle = g; x.fillRect(0, 0, size, size);
+    return c;
+  }
+  const FIRE = [5, 12, 20, 28, 36, 44].map((h) => glow(`hsla(${h},100%,58%,`, "rgba(255,250,220,1)"));
+  const EMBER = [268, 285, 300, 318, 200].map((h) => glow(`hsla(${h},100%,70%,`));
+  const SPARK = { purple: EMBER[1], blue: glow("hsla(200,100%,70%,"), orange: FIRE[3], pink: EMBER[3] };
+  const SMOKE = glow("hsla(250,30%,70%,", "hsla(250,30%,80%,0.6)");
+  const STAR = glow("hsla(40,100%,85%,", "rgba(255,250,235,1)", 32);
+  const AURA = glow("hsla(280,100%,65%,", "hsla(290,100%,80%,0.6)", 128);
+  const ORB = glow("hsla(205,100%,70%,", "rgba(255,255,255,1)", 96);
+  const CLOUD = (() => {
+    const c = makeCanvas(128, 128), x = c.getContext("2d");
+    const g = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+    g.addColorStop(0, "rgba(175,118,255,0.8)"); g.addColorStop(1, "rgba(175,118,255,0)");
+    x.fillStyle = g; x.fillRect(0, 0, 128, 128);
+    return c;
+  })();
+
+  // One body scale per hue band: the gradient-filled ellipse with belly and scale marks.
+  const SEG_TK = 40;
+  const SEGMENTS = Array.from({ length: 12 }, (_, i) => {
+    const hue = 265 + (i / 11) * 45, tk = SEG_TK;
+    const c = makeCanvas(tk * 2.4, tk * 1.7), x = c.getContext("2d");
+    x.translate(c.width / 2, c.height / 2);
+    const g = x.createRadialGradient(0, -tk * 0.28, 1, 0, 0, tk);
+    g.addColorStop(0, `hsla(${hue - 20},80%,78%,0.97)`);
+    g.addColorStop(0.45, `hsla(${hue},72%,42%,0.97)`);
+    g.addColorStop(1, `hsla(${hue + 35},82%,18%,0.97)`);
+    x.fillStyle = g;
+    x.beginPath(); x.ellipse(0, 0, tk * 1.12, tk * 0.74, 0, 0, TAU); x.fill();
+    x.strokeStyle = `hsla(${hue + 45},90%,72%,0.35)`; x.lineWidth = 1.4;
+    for (let s = -1; s <= 1; s++) { x.beginPath(); x.arc(s * tk * 0.5, -tk * 0.18, tk * 0.38, Math.PI, 0); x.stroke(); }
+    x.fillStyle = `hsla(${hue - 35},55%,82%,0.28)`;
+    x.beginPath(); x.ellipse(0, tk * 0.22, tk * 0.58, tk * 0.28, 0, 0, TAU); x.fill();
+    x.strokeStyle = `hsla(${hue + 22},88%,72%,0.3)`; x.lineWidth = 1.6;
+    x.beginPath(); x.ellipse(0, 0, tk * 1.12, tk * 0.74, 0, 0, TAU); x.stroke();
+    return c;
+  });
+
+  // ── Static sky, drawn once per resize ──────────────────────────────────────
+  let sky = null;
+  function buildSky() {
+    sky = makeCanvas(W * DPR, H * DPR);
+    const x = sky.getContext("2d");
+    x.scale(DPR, DPR);
+    const g = x.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, "#04001c"); g.addColorStop(0.5, "#080026"); g.addColorStop(1, "#12040e");
+    x.fillStyle = g; x.fillRect(0, 0, W, H);
+    const neb = [[0.18, 0.75, 0.55, "120,40,255"], [0.85, 0.65, 0.5, "255,70,140"], [0.55, 0.25, 0.45, "40,120,255"]];
+    for (const [nx, ny, nr, col] of neb) {
+      const r = Math.max(W, H) * nr, n = x.createRadialGradient(W * nx, H * ny, 0, W * nx, H * ny, r);
+      n.addColorStop(0, `rgba(${col},0.10)`); n.addColorStop(1, `rgba(${col},0)`);
+      x.fillStyle = n; x.fillRect(0, 0, W, H);
+    }
+    const mx = W * 0.82, my = H * 0.14;
+    const halo = x.createRadialGradient(mx, my, 0, mx, my, 220);
+    halo.addColorStop(0, "rgba(218,218,255,0.16)"); halo.addColorStop(1, "rgba(218,218,255,0)");
+    x.fillStyle = halo; x.fillRect(0, 0, W, H);
+    x.shadowColor = "rgba(218,218,255,0.75)"; x.shadowBlur = 28;
+    x.fillStyle = "rgba(232,232,255,0.92)"; x.beginPath(); x.arc(mx, my, 27, 0, TAU); x.fill();
+    x.shadowBlur = 0;
+    x.fillStyle = "rgba(6,0,30,0.78)"; x.beginPath(); x.arc(mx + 9, my, 23, 0, TAU); x.fill();
+  }
+
+  // ── World ──────────────────────────────────────────────────────────────────
+  const stars = [], clouds = [], lanterns = [], parts = [], smoke = [], rings = [], meteors = [];
+  const MAX_PARTS = AMBIENT ? 520 : 900;
+  const mouse = { x: 0, y: 0, tx: 0, ty: 0, px: -1, py: -1, moved: 0 };
+  let excite = 0, nextMeteor = rand(2, 5), clock = 0;
+
+  function populate() {
+    stars.length = clouds.length = lanterns.length = 0;
+    const count = Math.round((AMBIENT ? 170 : 240) * Math.min(1.4, (W * H) / (1440 * 900) + 0.35));
+    for (let i = 0; i < count; i++) {
+      stars.push({ x: rand(0, W), y: rand(0, H), r: rand(0.3, 1.6), tw: rand(0, TAU), sp: rand(0.5, 2), z: rand(0.15, 1) });
+    }
+    for (let i = 0; i < 7; i++) {
+      clouds.push({ x: rand(0, W), y: rand(0, H * 0.65), w: rand(120, 320), h: rand(30, 70), sp: rand(5, 15), al: rand(0.03, 0.12) });
+    }
+    if (!AMBIENT) {
+      for (let i = 0; i < 7; i++) {
+        lanterns.push({ x: rand(0, W), y: 60 + rand(0, H * 0.5), sw: rand(0, TAU), swSp: rand(0.5, 1.1), r: rand(7, 20), hue: Math.random() < 0.5 ? 0 : 30, bob: rand(0, TAU) });
+      }
+    }
+  }
+
+  function emit(sprite, x, y, vx, vy, size, life, grav = 0, drag = 0.98, list = parts) {
+    if (list.length >= MAX_PARTS) return;
+    list.push({ s: sprite, x, y, vx, vy, size, life, max: life, g: grav, d: drag });
+  }
+
+  // ── Dragon ─────────────────────────────────────────────────────────────────
+  const dragon = {
+    n: 130, pts: [], trail: [], t: rand(0, 50), phase: 0, wp: 0, jaw: 0, jawDir: 1, fireAcc: 0,
+    orb: { x: 0, y: 0, vx: 110, vy: 70, trail: [] },
+    head(t) {
+      return {
+        x: W * 0.5 + Math.sin(t * 0.65) * W * 0.36 + Math.sin(t * 1.25) * W * 0.1 + Math.cos(t * 0.4) * W * 0.05,
+        y: H * 0.5 + Math.cos(t * 0.48) * H * 0.3 + Math.sin(t * 1.05) * H * 0.09 + Math.cos(t * 0.9) * H * 0.04,
+      };
+    },
+    thick(i) {
+      if (i < 6) return 16 + i * 3.2;
+      if (i < 22) return 34 - i * 0.4;
+      const tp = 1 - i / this.n;
+      return Math.max(2.5, 28 * tp * tp + 2);
+    },
+    reset() {
+      this.pts = Array.from({ length: this.n }, () => ({ x: 0, y: 0, a: 0 }));
+      this.trail = [];
+      // Fill the trail with the path the head has "already flown", so the full body shows at once.
+      for (let k = 0; k < 900; k++) this.trail.push(this.head(this.t - k * 0.0075));
+      this.layout();
+      this.orb.x = W * (AMBIENT ? 0.8 : 0.2); this.orb.y = H * 0.3; this.orb.trail = [];
+    },
+    spacing() { return 4 * sc; },
+    layout() {
+      // Place the segments at equal distances along the head's flight path (frame-rate independent).
+      const pts = this.pts, tr = this.trail, sp = this.spacing();
+      pts[0].x = tr[0].x; pts[0].y = tr[0].y;
+      let seg = 0, need = sp, i = 1;
+      for (; i < tr.length && seg < this.n - 1; i++) {
+        const a = tr[i - 1], b = tr[i], dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
+        let used = 0;
+        while (d - used >= need && seg < this.n - 1) {
+          used += need; seg++;
+          const k = used / d;
+          pts[seg].x = a.x + dx * k; pts[seg].y = a.y + dy * k;
+          need = sp;
+        }
+        need -= d - used;
+      }
+      for (let s = seg + 1; s < this.n; s++) { pts[s].x = pts[seg].x; pts[s].y = pts[seg].y; }
+      if (i + 8 < tr.length) tr.length = i + 8;
+      for (let s = 0; s < this.n - 1; s++) pts[s].a = Math.atan2(pts[s].y - pts[s + 1].y, pts[s].x - pts[s + 1].x);
+      pts[this.n - 1].a = pts[this.n - 2].a;
+    },
+    update(f, dt) {
+      this.t += 0.0075 * f; this.phase += 0.038 * f; this.wp += 0.055 * f;
+      this.jaw += this.jawDir * (excite > 0 ? 0.08 : 0.038) * f;
+      if (this.jaw > 1) { this.jaw = 1; this.jawDir = -1; }
+      if (this.jaw < 0) { this.jaw = 0; this.jawDir = 1; }
+      this.trail.unshift(this.head(this.t));
+      this.layout();
+
+      // Fire from the mouth: a hot core, flickering flames and rising smoke.
+      const h = this.pts[0], a = h.a, cos = Math.cos(a), sin = Math.sin(a);
+      const mx = h.x + cos * 57 * sc, my = h.y + sin * 57 * sc;
+      const rate = (AMBIENT ? 55 : 95) * (excite > 0 ? 3 : 1);
+      this.fireAcc += rate * dt;
+      while (this.fireAcc >= 1) {
+        this.fireAcc--;
+        const sp = rand(2.2, 4.8) * sc, spread = rand(-0.35, 0.35);
+        emit(pick(FIRE), mx + rand(-4, 4), my + rand(-4, 4),
+          Math.cos(a + spread) * sp, Math.sin(a + spread) * sp, rand(6, 14) * sc, rand(18, 42), -0.03, 0.965);
+        if (Math.random() < 0.18) {
+          emit(SMOKE, mx + rand(-10, 10), my - 6, cos * 1.2 + rand(-0.6, 0.6), rand(-1.2, -0.4), rand(8, 16) * sc, rand(50, 90), -0.01, 0.99, smoke);
+        }
+      }
+      // Magic dust drifting off the neck.
+      if (Math.random() < 0.38 * f / 3 * (AMBIENT ? 0.6 : 1)) {
+        const p = this.pts[(Math.random() * 22) | 0];
+        emit(pick(EMBER), p.x + rand(-16, 16), p.y + rand(-16, 16), rand(-1, 1), rand(-1, 1), rand(2, 4.5), rand(16, 40), 0, 0.98);
+      }
+
+      // The orb bounces around, leaving a comet tail.
+      const o = this.orb;
+      o.x += o.vx * dt; o.y += o.vy * dt;
+      if (o.x > W - 25 || o.x < 25) { o.vx *= -1; o.x = Math.min(W - 25, Math.max(25, o.x)); }
+      if (o.y > H - 25 || o.y < 25) { o.vy *= -1; o.y = Math.min(H - 25, Math.max(25, o.y)); }
+      o.trail.unshift({ x: o.x, y: o.y });
+      if (o.trail.length > 40) o.trail.length = 40;
+    },
+    drawBody() {
+      const pts = this.pts;
+      // Soft bloom along the spine.
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = AMBIENT ? 0.14 : 0.2;
+      for (let i = 0; i < this.n - 1; i += 3) {
+        const p = pts[i], r = this.thick(i) * sc * 2.4;
+        ctx.drawImage(AURA, p.x - r, p.y - r, r * 2, r * 2);
+      }
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = "source-over";
+      // Scales, tail first so the head is on top.
+      for (let i = this.n - 2; i >= 1; i--) {
+        const p = pts[i], tk = this.thick(i) * sc, k = tk / SEG_TK;
+        const img = SEGMENTS[Math.min(11, ((i / this.n) * 12) | 0)];
+        const c = Math.cos(p.a) * DPR, s = Math.sin(p.a) * DPR;
+        ctx.setTransform(c, s, -s, c, p.x * DPR, p.y * DPR);
+        ctx.drawImage(img, -img.width * k / 2, -img.height * k / 2, img.width * k, img.height * k);
+        if (tk > 15 * sc && i % 4 === 0) {
+          ctx.fillStyle = `hsla(${265 + (i / this.n) * 45 + 18},100%,82%,0.55)`;
+          ctx.beginPath(); ctx.moveTo(-tk * 0.28, -tk * 0.72); ctx.lineTo(0, -tk * 1.12); ctx.lineTo(tk * 0.28, -tk * 0.72); ctx.closePath(); ctx.fill();
+        }
+      }
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    },
+    drawFins() {
+      for (let i = 12; i < this.n - 12; i += 14) {
+        const p = this.pts[i], tk = this.thick(i) * sc, wave = Math.sin(this.phase + i * 0.28) * 0.38;
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a + wave);
+        const fl = tk * 1.9, fg = ctx.createLinearGradient(0, -tk, 0, -tk - fl);
+        fg.addColorStop(0, "rgba(190,55,230,0.65)"); fg.addColorStop(1, "rgba(100,210,255,0)");
+        ctx.fillStyle = fg;
+        ctx.beginPath(); ctx.moveTo(-tk * 0.28, -tk * 0.48);
+        ctx.quadraticCurveTo(tk * 0.85 * Math.sin(wave), -tk - fl * 0.72, tk * 0.28, -tk * 0.48);
+        ctx.closePath(); ctx.fill(); ctx.restore();
+      }
+    },
+    drawLegs() {
+      [14, 28, 72, 86].forEach((li, idx) => {
+        const p = this.pts[li], tk = this.thick(li) * sc;
+        const wave = Math.sin(this.phase * 1.15 + idx * Math.PI * 0.5) * 0.48, side = idx % 2 === 0 ? 1 : -1;
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a);
+        const la = (Math.PI * 0.5 + wave) * side, lx1 = Math.cos(la) * tk * 2.1, ly1 = Math.sin(la) * tk * 2.1;
+        ctx.strokeStyle = "rgba(155,38,210,0.85)"; ctx.lineWidth = tk * 0.33; ctx.lineCap = "round";
+        ctx.beginPath(); ctx.moveTo(0, tk * 0.28 * side); ctx.lineTo(lx1, ly1); ctx.stroke();
+        const la2 = la + 0.82 * side, lx2 = lx1 + Math.cos(la2) * tk * 1.55, ly2 = ly1 + Math.sin(la2) * tk * 1.55;
+        ctx.lineWidth = tk * 0.19; ctx.beginPath(); ctx.moveTo(lx1, ly1); ctx.lineTo(lx2, ly2); ctx.stroke();
+        ctx.strokeStyle = "rgba(225,185,255,0.9)"; ctx.lineWidth = 1.8;
+        for (let c = 0; c < 3; c++) {
+          const ca = la2 + (c - 1) * 0.38;
+          ctx.beginPath(); ctx.moveTo(lx2, ly2); ctx.lineTo(lx2 + Math.cos(ca) * tk * 0.82, ly2 + Math.sin(ca) * tk * 0.82); ctx.stroke();
+        }
+        ctx.restore();
+      });
+    },
+    drawTail() {
+      const last = this.pts[this.n - 1];
+      ctx.save(); ctx.translate(last.x, last.y); ctx.rotate(this.pts[this.n - 2].a); ctx.scale(sc, sc);
+      ctx.fillStyle = "rgba(148,48,205,0.6)";
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.bezierCurveTo(16, -22, 32, -16, 21, 0); ctx.bezierCurveTo(32, 16, 16, 22, 0, 0); ctx.fill();
+      ctx.restore();
+    },
+    drawHead() {
+      const p = this.pts[0];
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a); ctx.scale(sc, sc);
+      // glows (additive sprites instead of shadowBlur)
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = 0.55 + this.jaw * 0.35 + (excite > 0 ? 0.3 : 0);
+      ctx.drawImage(FIRE[1], 30, -34, 64, 64);
+      ctx.globalAlpha = 0.35; ctx.drawImage(AURA, -60, -60, 120, 120);
+      ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over";
+
+      const hg = ctx.createRadialGradient(-5, -8, 2, 0, 0, 32);
+      hg.addColorStop(0, "rgba(225,82,255,0.97)"); hg.addColorStop(0.5, "rgba(140,20,205,0.97)"); hg.addColorStop(1, "rgba(78,0,125,0.97)");
+      ctx.fillStyle = hg; ctx.beginPath(); ctx.ellipse(0, 0, 33, 22, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = "rgba(182,42,225,0.96)"; ctx.beginPath();
+      ctx.moveTo(10, -8); ctx.quadraticCurveTo(50, -13, 59, -4); ctx.quadraticCurveTo(53, 2, 39, 4); ctx.quadraticCurveTo(20, 6, 10, 2); ctx.closePath(); ctx.fill();
+      const jy = this.jaw * 13;
+      ctx.fillStyle = "rgba(158,28,205,0.94)"; ctx.beginPath();
+      ctx.moveTo(10, 4); ctx.quadraticCurveTo(48, 4 + jy, 57, jy * 0.5); ctx.quadraticCurveTo(51, jy + 8, 37, jy + 6); ctx.quadraticCurveTo(20, jy + 8, 10, 8); ctx.closePath(); ctx.fill();
+      if (this.jaw > 0.25) {
+        ctx.strokeStyle = "rgba(255,55,100,0.92)"; ctx.lineWidth = 2.2; ctx.lineCap = "round";
+        const ty = jy * 0.5 + 4;
+        ctx.beginPath(); ctx.moveTo(30, ty); ctx.lineTo(53, ty + jy * 0.3); ctx.lineTo(62, ty + jy * 0.3 - 5);
+        ctx.moveTo(53, ty + jy * 0.3); ctx.lineTo(62, ty + jy * 0.3 + 5); ctx.stroke();
+      }
+      ctx.fillStyle = "rgba(242,220,255,0.97)";
+      ctx.beginPath();
+      for (let t = 0; t < 5; t++) { ctx.moveTo(18 + t * 8, -4); ctx.lineTo(20 + t * 8, -13); ctx.lineTo(22 + t * 8, -4); }
+      for (let t = 0; t < 4; t++) { ctx.moveTo(20 + t * 8, 4 + jy * 0.4); ctx.lineTo(22 + t * 8, 11 + jy * 0.6); ctx.lineTo(24 + t * 8, 4 + jy * 0.4); }
+      ctx.fill();
+      ctx.fillStyle = "rgba(78,0,125,0.85)";
+      ctx.beginPath(); ctx.ellipse(47, -6, 4, 2.5, -0.3, 0, TAU); ctx.ellipse(47, 0, 4, 2.5, 0.3, 0, TAU); ctx.fill();
+      // eye
+      ctx.fillStyle = "rgba(0,0,0,0.92)"; ctx.beginPath(); ctx.ellipse(-10, -12, 9, 7, 0.2, 0, TAU); ctx.fill();
+      const eg = ctx.createRadialGradient(-10, -12, 0, -10, -12, 7);
+      eg.addColorStop(0, "rgba(255,222,0,1)"); eg.addColorStop(0.4, "rgba(200,100,0,1)"); eg.addColorStop(0.7, "rgba(100,0,0,1)"); eg.addColorStop(1, "rgba(0,0,0,1)");
+      ctx.fillStyle = eg; ctx.beginPath(); ctx.ellipse(-10, -12, 7, 5, 0.2, 0, TAU); ctx.fill();
+      ctx.fillStyle = "rgba(0,0,0,0.96)"; ctx.beginPath(); ctx.ellipse(-10, -12, 1.5, 4, 0.2, 0, TAU); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.85)"; ctx.beginPath(); ctx.arc(-13, -14, 2, 0, TAU); ctx.fill();
+      ctx.strokeStyle = "rgba(255,200,0,0.8)"; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(-10, -12, 8, 6, 0.2, 0, TAU); ctx.stroke();
+      // horns
+      ctx.strokeStyle = "rgba(200,155,255,0.92)"; ctx.lineWidth = 4; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(-15, -18); ctx.bezierCurveTo(-26, -36, -16, -47, -8, -41);
+      ctx.moveTo(0, -20); ctx.bezierCurveTo(-5, -39, 11, -52, 16, -43); ctx.stroke();
+      // whiskers
+      ctx.lineWidth = 1.5;
+      for (let w = 0; w < 4; w++) {
+        const wx = 40 + w * 5, wy = -6 + w * 4, wl = 52 + w * 11, ww = Math.sin(this.wp + w * 0.82) * 16;
+        ctx.strokeStyle = `rgba(${200 - w * 10},${175 + w * 5},255,${0.7 - w * 0.08})`;
+        ctx.beginPath(); ctx.moveTo(wx, wy); ctx.bezierCurveTo(wx + wl * 0.3, wy + ww, wx + wl * 0.7, wy - ww * 0.5, wx + wl, wy + ww * 0.3); ctx.stroke();
+      }
+      // mane
+      ctx.lineWidth = 2; ctx.strokeStyle = "rgba(150,75,225,0.45)"; ctx.beginPath();
+      for (let m = 0; m < 9; m++) {
+        const ma = (m / 9) * TAU, ml = 12 + Math.sin(this.wp * 1.4 + m) * 5;
+        ctx.moveTo(Math.cos(ma) * 29, Math.sin(ma) * 21); ctx.lineTo(Math.cos(ma) * (29 + ml), Math.sin(ma) * (21 + ml));
+      }
+      ctx.stroke();
+      // glowing eye, horn tips and whisker tips
+      ctx.globalCompositeOperation = "lighter";
+      ctx.drawImage(FIRE[5], -22, -24, 24, 24);
+      ctx.drawImage(FIRE[5], -16, -49, 16, 16); ctx.drawImage(FIRE[5], 8, -51, 16, 16);
+      for (let w = 0; w < 4; w++) {
+        const wx = 40 + w * 5 + 52 + w * 11, wy = -6 + w * 4 + Math.sin(this.wp + w * 0.82) * 16 * 0.3;
+        ctx.drawImage(FIRE[5], wx - 6, wy - 6, 12, 12);
+      }
+      ctx.globalCompositeOperation = "source-over";
+      ctx.restore();
+    },
+    drawOrb() {
+      const o = this.orb, tr = o.trail;
+      ctx.globalCompositeOperation = "lighter";
+      for (let i = tr.length - 1; i > 0; i--) {
+        const k = 1 - i / tr.length, r = 10 * k + 2;
+        ctx.globalAlpha = k * 0.5; ctx.drawImage(ORB, tr[i].x - r, tr[i].y - r, r * 2, r * 2);
+      }
+      ctx.globalAlpha = 1;
+      ctx.drawImage(ORB, o.x - 30, o.y - 30, 60, 60);
+      ctx.globalCompositeOperation = "source-over";
+      ctx.strokeStyle = "rgba(140,200,255,0.6)"; ctx.lineWidth = 1;
+      for (let s = 0; s < 3; s++) {
+        const r0 = this.t * 2 + s * (TAU / 3);
+        ctx.beginPath(); ctx.arc(o.x, o.y, 13, r0, r0 + Math.PI * 0.9); ctx.stroke();
+      }
+    },
+    drawLightning() {
+      if (Math.random() > 0.018 * frameF * (excite > 0 ? 3 : 1)) return;
+      const p = this.pts[0], pts = [[-10, -12]];
+      let bx = -10, by = -12;
+      for (let b = 0; b < 6; b++) { bx += 12 + rand(-11, 11); by += rand(-11, 11); pts.push([bx, by]); }
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a); ctx.scale(sc, sc);
+      ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round"; ctx.lineJoin = "round";
+      for (const [w, a] of [[6, 0.18], [1.6, 0.95]]) {
+        ctx.strokeStyle = `rgba(255,255,140,${a})`; ctx.lineWidth = w;
+        ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke();
+      }
+      ctx.restore();
+    },
+    draw() {
+      ctx.globalAlpha = 1;
+      this.drawOrb();
+      if (AMBIENT) ctx.globalAlpha = 0.85;
+      this.drawBody(); this.drawFins(); this.drawLegs(); this.drawTail(); this.drawHead(); this.drawLightning();
+      ctx.globalAlpha = 1;
+    },
+  };
+
+  // ── Layers ─────────────────────────────────────────────────────────────────
+  function drawStars(f) {
+    ctx.globalCompositeOperation = "lighter";
+    const ox = mouse.x * 14, oy = mouse.y * 10;
+    for (const s of stars) {
+      s.tw += s.sp * 0.016 * f;
+      const a = 0.25 + (Math.sin(s.tw) * 0.5 + 0.5) * 0.65 * s.z;
+      let x = (s.x + ox * s.z) % W, y = (s.y + oy * s.z) % H;
+      if (x < 0) x += W; if (y < 0) y += H;
+      const r = s.r * 3.2;
+      ctx.globalAlpha = a; ctx.drawImage(STAR, x - r, y - r, r * 2, r * 2);
+    }
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over";
+  }
+
+  function drawAurora() {
+    ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round";
+    const bands = [[0.22, 0.04, 150, 0.9], [0.3, 0.05, 280, 1.3], [0.16, 0.03, 200, 0.6]];
+    bands.forEach(([base, amp, hue, speed], b) => {
+      ctx.beginPath();
+      for (let x = -40; x <= W + 40; x += 28) {
+        const y = H * base + Math.sin(x * 0.0035 + clock * 0.25 * speed + b) * H * amp
+          + Math.sin(x * 0.009 - clock * 0.4 * speed) * H * amp * 0.4 + mouse.y * 8;
+        x === -40 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      for (const [w, a] of [[110, 0.035], [46, 0.05], [10, 0.07]]) {
+        ctx.strokeStyle = `hsla(${hue + Math.sin(clock * 0.2 + b) * 20},100%,62%,${a})`; ctx.lineWidth = w; ctx.stroke();
+      }
+    });
+    ctx.globalCompositeOperation = "source-over";
+  }
+
+  function drawClouds(dt) {
+    for (const c of clouds) {
+      c.x += c.sp * dt; if (c.x > W + c.w) c.x = -c.w;
+      ctx.globalAlpha = c.al;
+      ctx.drawImage(CLOUD, c.x - c.w * 0.58 + mouse.x * 6, c.y - c.h * 0.58, c.w * 1.16, c.h * 1.16);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawLanterns(dt) {
+    for (const l of lanterns) {
+      l.sw += l.swSp * dt; l.bob += dt * 0.6;
+      const x = l.x + Math.sin(l.sw) * 8 + mouse.x * 20, y = l.y + Math.sin(l.bob) * 4 + mouse.y * 12;
+      ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = 0.6 + Math.sin(clock * 7 + l.x) * 0.08;
+      const gr = l.r * 3.2; ctx.drawImage(FIRE[l.hue ? 4 : 1], x - gr, y - gr, gr * 2, gr * 2);
+      ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over";
+      ctx.save(); ctx.translate(x, y); ctx.rotate(Math.sin(l.sw) * 0.06);
+      ctx.strokeStyle = "rgba(198,178,98,0.4)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(0, -l.r * 2.1); ctx.lineTo(0, -l.r * 1.2); ctx.stroke();
+      const lb = ctx.createRadialGradient(-l.r * 0.28, -l.r * 0.28, 1, 0, 0, l.r);
+      lb.addColorStop(0, `hsla(${l.hue},100%,82%,0.97)`); lb.addColorStop(0.6, `hsla(${l.hue},100%,52%,0.97)`); lb.addColorStop(1, `hsla(${l.hue + 22},82%,28%,0.97)`);
+      ctx.fillStyle = lb; ctx.beginPath(); ctx.ellipse(0, 0, l.r * 0.68, l.r, 0, 0, TAU); ctx.fill();
+      ctx.strokeStyle = `hsla(${l.hue},80%,62%,0.7)`; ctx.beginPath();
+      for (let t = 0; t < 5; t++) { ctx.moveTo((t - 2) * 3, l.r); ctx.lineTo((t - 2) * 3 + Math.sin(l.sw + t) * 4, l.r + 10); }
+      ctx.stroke(); ctx.restore();
+    }
+  }
+
+  function drawMeteors(dt) {
+    nextMeteor -= dt;
+    if (nextMeteor <= 0) {
+      nextMeteor = rand(AMBIENT ? 4 : 2.5, AMBIENT ? 10 : 7);
+      const a = rand(0.35, 0.65);
+      meteors.push({ x: rand(W * 0.1, W * 0.9), y: rand(-20, H * 0.3), vx: Math.cos(a) * 900, vy: Math.sin(a) * 900, life: 1 });
+    }
+    ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round";
+    for (let i = meteors.length - 1; i >= 0; i--) {
+      const m = meteors[i];
+      m.x += m.vx * dt; m.y += m.vy * dt; m.life -= dt * 1.1;
+      if (m.life <= 0) { meteors.splice(i, 1); continue; }
+      const len = 0.16, g = ctx.createLinearGradient(m.x, m.y, m.x - m.vx * len, m.y - m.vy * len);
+      g.addColorStop(0, `rgba(255,255,255,${m.life})`); g.addColorStop(1, "rgba(160,120,255,0)");
+      ctx.strokeStyle = g; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(m.x, m.y); ctx.lineTo(m.x - m.vx * len, m.y - m.vy * len); ctx.stroke();
+      ctx.globalAlpha = m.life; ctx.drawImage(STAR, m.x - 8, m.y - 8, 16, 16); ctx.globalAlpha = 1;
+    }
+    ctx.globalCompositeOperation = "source-over";
+  }
+
+  function stepParticles(list, f, additive, grow) {
+    ctx.globalCompositeOperation = additive ? "lighter" : "source-over";
+    let w = 0;
+    for (let i = 0; i < list.length; i++) {
+      const p = list[i];
+      p.x += p.vx * f; p.y += p.vy * f; p.vy += p.g * f;
+      const drag = Math.pow(p.d, f); p.vx *= drag; p.vy *= drag;
+      p.life -= f;
+      if (p.life <= 0) continue;
+      const a = p.life / p.max, sz = grow ? p.size * (1 + (1 - a) * 1.8) : p.size * (0.35 + 0.65 * a);
+      ctx.globalAlpha = grow ? a * 0.22 : a;
+      ctx.drawImage(p.s, p.x - sz, p.y - sz, sz * 2, sz * 2);
+      list[w++] = p;
+    }
+    list.length = w;
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over";
+  }
+
+  function drawRings(dt) {
+    for (let i = rings.length - 1; i >= 0; i--) {
+      const r = rings[i];
+      r.life -= dt * 1.8; r.r += dt * 260;
+      if (r.life <= 0) { rings.splice(i, 1); continue; }
+      ctx.strokeStyle = `hsla(${r.hue},100%,75%,${r.life * 0.7})`; ctx.lineWidth = 2 + r.life * 3;
+      ctx.beginPath(); ctx.arc(r.x, r.y, r.r, 0, TAU); ctx.stroke();
+    }
+  }
+
+  function cursorTrail() {
+    if (mouse.moved <= 0 || mouse.px < 0) return;
+    mouse.moved = 0;
+    emit(pick(EMBER), mouse.px + rand(-3, 3), mouse.py + rand(-3, 3), rand(-0.4, 0.4), rand(-0.8, -0.1), rand(2, 4), rand(14, 26), -0.01, 0.97);
+  }
+
+  // ── Loop ───────────────────────────────────────────────────────────────────
+  let last = performance.now(), frameF = 1, workAvg = 6, goodTime = 0, running = true;
+
+  function frame(now) {
+    const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+    last = now; clock += dt;
+    const f = dt * 60; frameF = f;
+    const start = performance.now();
+
+    mouse.x += (mouse.tx - mouse.x) * Math.min(1, dt * 3);
+    mouse.y += (mouse.ty - mouse.y) * Math.min(1, dt * 3);
+    if (excite > 0) excite -= dt;
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(sky, 0, 0);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    drawAurora();
+    drawStars(f);
+    drawMeteors(dt);
+    drawClouds(dt);
+    drawLanterns(dt);
+    stepParticles(smoke, f, false, true);
+    dragon.update(f, dt);
+    dragon.draw();
+    cursorTrail();
+    stepParticles(parts, f, true, false);
+    drawRings(dt);
+
+    adapt(performance.now() - start, dt);
+    if (running) requestAnimationFrame(frame);
+  }
+
+  // Lower the canvas resolution when frames are slow, raise it again when there is headroom.
+  // Two signals: the time spent drawing, and the real frame interval compared with the display's
+  // refresh interval (which also catches slow painting that happens outside our code).
+  let frameAvg = 16.7, refresh = 16.7, slowTime = 0, ceiling = 1, settle = 1.5;  // skip page-load hiccups
+  function adapt(work, dt) {
+    const ms = dt * 1000;
+    if (ms <= 0) return;
+    workAvg += (work - workAvg) * 0.05;
+    frameAvg += (ms - frameAvg) * 0.08;
+    if (ms < frameAvg) refresh += (ms - refresh) * 0.1;    // display interval: average of the faster frames
+    settle = Math.max(0, settle - dt);
+    if (settle > 0) return;
+    const slow = workAvg > 11 || frameAvg > Math.max(6, refresh) * 1.12 + 0.5 || frameAvg > 21;
+    slowTime = slow ? slowTime + dt : 0;
+    if (slowTime > 0.6 && quality > 0.5) {
+      ceiling = quality - 0.01;                            // don't climb back to a level that was too slow
+      quality = Math.max(0.5, quality - 0.15);
+      slowTime = 0; settle = 1; workAvg = 6; frameAvg = refresh; resize();
+    } else if (!slow && workAvg < 4 && quality + 0.15 < ceiling) {
+      goodTime += dt;
+      if (goodTime > 4) { quality = Math.min(1, quality + 0.15); goodTime = 0; settle = 1; resize(); }
+    } else {
+      goodTime = 0;
+    }
+  }
+
+  function resize() {
+    const oldW = W, oldH = H;
+    W = window.innerWidth; H = window.innerHeight;
+    DPR = Math.min(window.devicePixelRatio || 1, 2) * quality;
+    canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
+    canvas.style.width = W + "px"; canvas.style.height = H + "px";
+    sc = Math.max(0.55, Math.min(1.15, Math.min(W, H) / 820));
+    buildSky();
+    if (W !== oldW || H !== oldH) { populate(); dragon.reset(); }
+  }
+
+  // ── Input & public API ─────────────────────────────────────────────────────
+  window.addEventListener("resize", resize);
+  window.addEventListener("pointermove", (e) => {
+    mouse.tx = (e.clientX / W) * 2 - 1; mouse.ty = (e.clientY / H) * 2 - 1;
+    mouse.px = e.clientX; mouse.py = e.clientY; mouse.moved++;
+  }, { passive: true });
+  document.addEventListener("visibilitychange", () => { last = performance.now(); });
+
+  window.MaxScene = {
+    /** Particle burst and shock ring at a screen point. color: purple | blue | orange | pink */
+    burst(x, y, color = "purple", count = 36) {
+      if (REDUCED) return;
+      const sprite = SPARK[color] || SPARK.purple, hue = { purple: 285, blue: 200, orange: 30, pink: 320 }[color] || 285;
+      for (let i = 0; i < count; i++) {
+        const a = rand(0, TAU), s = rand(1.5, 7);
+        emit(sprite, x, y, Math.cos(a) * s, Math.sin(a) * s, rand(2.5, 6), rand(22, 50), 0.06, 0.94);
+      }
+      rings.push({ x, y, r: 6, life: 1, hue });
+    },
+    /** The dragon breathes a big blast of fire (used when Max answers). */
+    excite(seconds = 1.2) { excite = Math.max(excite, seconds); },
+    /** Current render resolution (1 = full; lowered automatically on slow devices). */
+    get quality() { return quality; },
+  };
+
+  resize();
+  if (REDUCED) {
+    // Respect "reduce motion": draw one still frame.
+    running = false;
+    frame(performance.now());
+    window.addEventListener("resize", () => frame(performance.now()));
+  } else {
+    requestAnimationFrame((t) => { last = t; frame(t); });
+  }
+})();
+</script>
+{% endraw %}
