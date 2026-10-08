@@ -8,7 +8,7 @@ on:
       minutes: {type: number, required: true}
       total_minutes: {type: number, required: true}
       preset: {type: string, default: large}
-      resume: {type: boolean, default: true}
+      resume_from: {type: string, default: "", description: "artifact of the previous stage"}
 
 permissions:
   contents: write
@@ -31,16 +31,16 @@ jobs:
           name: corpus
           path: corpus
       - uses: actions/download-artifact@v4
-        if: inputs.resume
+        if: inputs.resume_from != ''
         with:
-          name: checkpoint-${{ inputs.stage - 1 }}
+          name: ${{ inputs.resume_from }}
           path: ckpt
       - name: Train for ${{ inputs.minutes }} minutes
         working-directory: Max.AI
         run: |
           python -m maxgpt.train_torch --corpus ../corpus --out ../ckpt --preset ${{ inputs.preset }} \
             --minutes ${{ inputs.minutes }} --total-minutes ${{ inputs.total_minutes }} \
-            ${{ inputs.resume && '--resume' || '' }}
+            ${{ inputs.resume_from != '' && '--resume' || '' }}
       - uses: actions/upload-artifact@v4
         with:
           name: checkpoint-${{ inputs.stage }}

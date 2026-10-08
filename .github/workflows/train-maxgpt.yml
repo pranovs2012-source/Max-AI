@@ -58,7 +58,6 @@ jobs:
     uses: ./.github/workflows/train-stage.yml
     with:
       stage: 1
-      resume: false
       preset: ${{ inputs.preset }}
       minutes: ${{ fromJSON(inputs.stage1_minutes) }}
       total_minutes: ${{ fromJSON(needs.corpus.outputs.total) }}
@@ -69,6 +68,7 @@ jobs:
     uses: ./.github/workflows/train-stage.yml
     with:
       stage: 2
+      resume_from: checkpoint-1
       preset: ${{ inputs.preset }}
       minutes: ${{ fromJSON(inputs.stage2_minutes) }}
       total_minutes: ${{ fromJSON(needs.corpus.outputs.total) }}
@@ -79,6 +79,7 @@ jobs:
     uses: ./.github/workflows/train-stage.yml
     with:
       stage: 3
+      resume_from: checkpoint-2
       preset: ${{ inputs.preset }}
       minutes: ${{ fromJSON(inputs.stage3_minutes) }}
       total_minutes: ${{ fromJSON(needs.corpus.outputs.total) }}
