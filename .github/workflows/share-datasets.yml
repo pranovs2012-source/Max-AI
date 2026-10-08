@@ -1,0 +1,24 @@
+name: Share training datasets
+
+# Copies the public training datasets into the "datasets" branch so machines that can only
+# reach GitHub can build the corpus too. Dolly 15k is CC BY-SA 3.0 (Databricks).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  share:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download and publish
+        run: |
+          mkdir -p /tmp/ds && cd /tmp/ds
+          curl -sSfL -o databricks-dolly-15k.jsonl \
+            https://huggingface.co/datasets/databricks/databricks-dolly-15k/resolve/main/databricks-dolly-15k.jsonl
+          printf "databricks-dolly-15k.jsonl: Databricks Dolly 15k, CC BY-SA 3.0\nhttps://huggingface.co/datasets/databricks/databricks-dolly-15k\n" > SOURCES.txt
+          git init -q && git checkout -q -b datasets
+          git add . && git -c user.name="maxgpt-trainer[bot]" -c user.email="maxgpt-trainer@users.noreply.github.com" commit -q -m "Training datasets"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" datasets
