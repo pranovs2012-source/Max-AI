@@ -1,0 +1,15 @@
+{
+ "minutes": 490.1095395366351,
+ "steps": 7297,
+ "tokens": 40784022,
+ "tokens_this_stage": 14846862,
+ "val_loss": 1.067883913964033,
+ "config": {
+  "vocab_size": 8192,
+  "n_ctx": 512,
+  "n_layer": 8,
+  "n_head": 8,
+  "n_embd": 256
+ },
+ "grounded": true
+}
