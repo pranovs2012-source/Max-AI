@@ -114,6 +114,12 @@ class Thinking:
                 "route": route, "seconds": round(time.perf_counter() - self.start, 2)}
 
 
+# Capitalised words an answer may start a sentence with even when the sources don't use them.
+SENTENCE_STARTERS = {"the", "a", "an", "it", "its", "he", "his", "she", "her", "they", "their", "this", "that",
+                     "these", "those", "there", "in", "on", "at", "by", "for", "from", "as", "after", "before",
+                     "during", "since", "today", "yes", "no", "i", "according", "both", "however", "also"}
+
+
 class Assistant:
     def __init__(self, engine=None, use_web=True, reader=None):
         self.engine = engine      # MaxGPTEngine for conversation (may be None in tests)
@@ -519,7 +525,7 @@ class Assistant:
             prompt = grounded_question(q, passages)
             for temp in (0.0, 0.3):
                 answer = self.reader.reply([("user", prompt)], guard=False, temperature=temp, max_new_tokens=120)
-                problem = self.unsupported(answer, " ".join(passages))
+                problem = self.unsupported(answer, " ".join(passages), q)
                 if not problem and self.copied(answer, passages):
                     th.step("Writing the answer", "My draft only repeated one source sentence; using the fuller summary")
                     break
@@ -538,7 +544,7 @@ class Assistant:
         return any(a and a in norm(p) for p in passages)
 
     @staticmethod
-    def unsupported(answer, context):
+    def unsupported(answer, context, question=""):
         """Why a written answer can't be trusted (None if it's fine)."""
         problem = Assistant.quality_problem(answer)
         if problem:
@@ -551,6 +557,10 @@ class Assistant:
         words = [t for t in terms(answer) if not t.isdigit()]
         if words and sum(t in ctx_terms for t in words) / len(words) < 0.8:
             return "Used words the sources don't contain"
+        known = set(re.findall(r"[a-z]+", (context + " " + question).lower())) | SENTENCE_STARTERS
+        names = re.findall(r"\b[A-Z][a-zA-Z]+", answer)
+        if any(n.lower() not in known for n in names):
+            return "Used a name the sources don't contain"
         ctx_numbers = set(re.findall(r"\d+(?:[.,]\d+)?", context))
         if any(n not in ctx_numbers for n in re.findall(r"\d+(?:[.,]\d+)?", answer)):
             return "Gave a number the sources don't contain"

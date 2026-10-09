@@ -119,6 +119,9 @@ class AssistantTest(unittest.TestCase):
         self.assertIsNotNone(Assistant.unsupported("The tower is 350 metres tall.", ctx))        # wrong number
         self.assertIsNotNone(Assistant.unsupported("The tower is painted bright purple daily.", ctx))  # made up
         self.assertIsNotNone(Assistant.unsupported("I couldn't find the answer to that.", ctx))
+        ctx = "Musk founded SpaceX in 2002 and became the largest shareholder of Tesla in 2004."
+        self.assertIsNotNone(Assistant.unsupported("Gukk founded SpaceX in 2002 and became the largest shareholder of Tesla.", ctx))
+        self.assertIsNone(Assistant.unsupported("He founded SpaceX in 2002.", ctx, "When did Elon Musk found SpaceX?"))
 
     def test_copied_drafts_are_detected(self):
         passages = ["The tower is 330 metres tall, about the same height as an 81-storey building."]

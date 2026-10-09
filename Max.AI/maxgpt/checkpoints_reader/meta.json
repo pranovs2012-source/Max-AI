@@ -1,9 +1,9 @@
 {
- "minutes": 210.00737085342408,
- "steps": 7831,
- "tokens": 48769790,
- "tokens_this_stage": 23621585,
- "val_loss": 1.1063281536102294,
+ "minutes": 490.1095395366351,
+ "steps": 7297,
+ "tokens": 40784022,
+ "tokens_this_stage": 14846862,
+ "val_loss": 1.067883913964033,
  "config": {
   "vocab_size": 8192,
   "n_ctx": 512,

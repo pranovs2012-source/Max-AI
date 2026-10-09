@@ -51,21 +51,24 @@ jobs:
         run: |
           python -m maxgpt.knowledge
           python tools/model_eval.py ../ckpt
-      - name: Install it if it beats the current model
+      - name: Install it as the reader if it reads search results better
         run: |
-          # compare with the model on main right now (an earlier stage may have installed one)
+          # The main chat model stays as it is; a trained model only replaces the reader, which writes
+          # answers from web results, and only when it reads them better than the installed one.
+          # Compare with the reader on main right now (an earlier stage may have installed one).
           git fetch -q origin "${GITHUB_REF_NAME}"
           git checkout -q -B publish "origin/${GITHUB_REF_NAME}"
-          new=$(python -c "import json;print(json.load(open('ckpt/eval.json'))['score'])")
-          old=$(python -c "import json,os;p='Max.AI/maxgpt/checkpoints/eval.json';print(json.load(open(p))['score'] if os.path.exists(p) else 0)")
-          echo "new score $new, current score $old"
+          new=$(python -c "import json;print(json.load(open('ckpt/eval.json'))['reading'])")
+          old=$(python -c "import json,os;p='Max.AI/maxgpt/checkpoints_reader/eval.json';print(json.load(open(p)).get('reading', 0) if os.path.exists(p) else 0)")
+          echo "new reading score $new, installed reader $old"
           if python -c "import sys;sys.exit(0 if $new > $old else 1)"; then
-            cp ckpt/maxgpt.npz ckpt/tokenizer.json ckpt/meta.json ckpt/eval.json Max.AI/maxgpt/checkpoints/
+            mkdir -p Max.AI/maxgpt/checkpoints_reader
+            cp ckpt/maxgpt.npz ckpt/tokenizer.json ckpt/meta.json ckpt/eval.json Max.AI/maxgpt/checkpoints_reader/
             git config user.name "maxgpt-trainer[bot]"
             git config user.email "maxgpt-trainer@users.noreply.github.com"
-            git add Max.AI/maxgpt/checkpoints
-            git commit -q -m "MaxGPT stage ${{ inputs.stage }}: score $new (was $old) [skip ci]"
+            git add Max.AI/maxgpt/checkpoints_reader
+            git commit -q -m "MaxGPT reader from stage ${{ inputs.stage }}: reading $new (was $old) [skip ci]"
             git push origin "HEAD:${GITHUB_REF_NAME}" || { git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}"; }
           else
-            echo "Keeping the current model."
+            echo "Keeping the current reader."
           fi
