@@ -143,8 +143,19 @@ The **Train MaxGPT** workflow (Actions tab → *Train MaxGPT* → *Run workflow*
 Training uses PyTorch for speed (`maxgpt/train_torch.py`), but the network is exactly MaxGPT's and
 the weights are exported in MaxGPT's own format, so the app still runs on NumPy alone. After every
 stage `tools/model_eval.py` grades the model (identity, everyday questions, answering from search
-results, admitting when the answer isn't there) and the new weights are committed only if they beat
-the current model.
+results, admitting when the answer isn't there) and the new weights are committed only if they read
+search results better than the installed reader.
+
+Max runs two MaxGPT models:
+
+| Model | Folder | Job |
+|---|---|---|
+| Chat model | `maxgpt/checkpoints/` | conversation: who Max is, coding help, trained topics |
+| Reader | `maxgpt/checkpoints_reader/` | writes answers from web results (big-corpus model, 490 min of training) |
+
+The reader's draft is shown only when every name, word and number in it appears in the search
+results; otherwise Max answers with the best sentences from the results themselves, so a shaky
+draft never reaches the chat.
 
 ```bash
 python -m maxgpt.corpus --out corpus                     # build the corpus (downloads Dolly + SQuAD)
